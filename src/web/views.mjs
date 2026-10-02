@@ -35,7 +35,7 @@ export function renderForm(root,state,controller,api,{full=true}={}) {
   if(!full&&root.querySelector('#save-status')) {
     root.querySelector('#save-status').textContent=status;
     const error=root.querySelector('#save-error');error.textContent=state.error;error.hidden=!state.error;
-    root.querySelectorAll('[data-form-control]').forEach(node=>node.disabled=state.busy);
+    root.querySelectorAll('[data-form-control]').forEach(node=>node.disabled=state.busy||(state.hasPendingSave&&node.dataset.pendingAction!=='save'));
     root.querySelectorAll('[data-field-error]').forEach(node=>{const text=state.errors[node.dataset.fieldError]??'';node.textContent=text;node.hidden=!text;});
     return;
   }
@@ -77,8 +77,8 @@ export function renderForm(root,state,controller,api,{full=true}={}) {
   const discard=button('舍弃草稿',()=>controller.discard(),'text');discard.setAttribute('data-form-control','');actions.append(discard);
   const right=el('div',{class:'step-actions'});
   if(state.step!=='basic'){const previous=button('上一步',()=>controller.previous(),'secondary');previous.setAttribute('data-form-control','');right.append(previous);}
-  const next=button(state.step==='confirm'?'确认保存':'下一步',()=>state.step==='confirm'?controller.save():controller.next());next.setAttribute('data-form-control','');right.append(next);
-  if(state.error){const retry=button(state.hasPendingSave?'重试保存行程':'重试保存草稿',()=>state.hasPendingSave?controller.retrySave():controller.retryDraft(),'secondary');retry.setAttribute('data-form-control','');right.append(retry);}
-  actions.append(right);root.append(actions);root.querySelectorAll('[data-form-control]').forEach(node=>{if(state.busy)node.disabled=true;});
+  const next=button(state.step==='confirm'?'确认保存':'下一步',()=>state.step==='confirm'?controller.save():controller.next());next.setAttribute('data-form-control','');if(state.step==='confirm')next.setAttribute('data-pending-action','save');right.append(next);
+  if(state.error){const retry=button(state.hasPendingSave?'重试保存行程':'重试保存草稿',()=>state.hasPendingSave?controller.retrySave():controller.retryDraft(),'secondary');retry.setAttribute('data-form-control','');if(state.hasPendingSave)retry.setAttribute('data-pending-action','save');right.append(retry);}
+  actions.append(right);root.append(actions);root.querySelectorAll('[data-form-control]').forEach(node=>{if(state.busy||(state.hasPendingSave&&node.dataset.pendingAction!=='save'))node.disabled=true;});
   const first=Object.keys(errors)[0];if(first)root.querySelector(`[data-error-key="${first}"]`)?.focus();
 }

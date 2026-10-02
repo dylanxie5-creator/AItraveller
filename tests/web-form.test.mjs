@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {createFormController} from '../src/web/form-controller.mjs';
 import {createTripForm} from '../src/shared/trip-form-model.mjs';
-import {setup} from './helpers/database.mjs';import {input} from './helpers/fixtures.mjs';
+import {setup,prepare} from './helpers/database.mjs';import {input} from './helpers/fixtures.mjs';
 function editor(t,{apiOverride={},slot,render=()=>{}}={}) {
   const {service}=setup(t);const api={draft:async k=>service.getDraft(k),saveDraft:async(k,c)=>service.saveDraft(k,c),discardDraft:async(k,c)=>service.discardDraft(k,c),saveTrip:async(id,c)=>service.saveTrip(id,c),trip:async id=>service.getTrip(id),...apiOverride};
   const model=createTripForm({slot:slot??{targetTripId:'trip-1',baseTripRevision:0,step:'basic',input:input()}});const routes=[];let id=0;
@@ -20,8 +20,35 @@ test('uncertain trip save retries same command and creates only one trip',async 
   let savedCommand;let first=true;const {service,model,controller,routes}=editor(t,{apiOverride:{saveTrip:async(id,command)=>{if(first){savedCommand=structuredClone(command);first=false;throw {code:'NETWORK',message:'lost'};}assert.deepEqual(command,savedCommand);return service.saveTrip(id,command);}}});
   await controller.start();await controller.next();await controller.next();await controller.save();assert.equal(model.snapshot().step,'confirm');assert.equal(routes.length,0);await controller.retrySave();assert.equal(service.listTrips().length,1);assert.equal(routes[0].type,'detail');
 });
-test('changed input after uncommitted save failure gets a new operation identity',async t=>{
-  const commands=[];const {controller}=editor(t,{apiOverride:{saveTrip:async(id,command)=>{commands.push(structuredClone(command));throw {code:'NETWORK',message:'lost'};}}});await controller.start();await controller.next();await controller.next();await controller.save();controller.change('name','改标题');await controller.save();assert.notEqual(commands[0].operationId,commands[1].operationId);assert.equal(commands[1].input.name,'改标题');
+test('uncertain uncommitted save blocks step changes until its exact command succeeds',async t=>{
+  let first=true;const commands=[];const {service,controller,model,routes}=editor(t,{apiOverride:{saveTrip:async(id,c)=>{commands.push(structuredClone(c));if(first){first=false;throw {code:'NETWORK',message:'lost'};}return service.saveTrip(id,c);}}});
+  await controller.start();await controller.next();await controller.next();await controller.save();
+  const revision=service.getDraft('new').revision;await controller.previous();
+  assert.equal(model.snapshot().step,'confirm');assert.equal(service.getDraft('new').revision,revision);
+  await controller.next();controller.change('name','改标题');await controller.retryDraft();
+  assert.equal(model.toInput().name,'江南小旅行');await controller.retrySave();
+  assert.deepEqual(commands[1],commands[0]);assert.equal(service.listTrips().length,1);assert.equal(routes[0].type,'detail');
+});
+
+test('lost committed save response retains retry identity despite attempted mutations',async t=>{
+  let first=true;const commands=[];const {service,controller,model,routes}=editor(t,{apiOverride:{saveTrip:async(id,c)=>{commands.push(structuredClone(c));const trip=service.saveTrip(id,c);if(first){first=false;throw {code:'NETWORK',message:'lost'};}return trip;}}});
+  await controller.start();await controller.next();await controller.next();await controller.save();
+  controller.change('name','改标题');assert.equal(model.toInput().name,'江南小旅行');assert.equal(controller.snapshot().hasPendingSave,true);
+  await controller.discard();assert.equal(routes.length,0);await controller.retrySave();
+  assert.deepEqual(commands[1],commands[0]);assert.equal(service.listTrips().length,1);assert.equal(routes[0].type,'detail');
+});
+
+test('server rejects historical unknown city with visible route field error and retained input',async t=>{
+  const {service,database}=setup(t);service.saveTrip('trip-1',prepare(service));
+  const row=database.db.prepare('SELECT payload FROM trip_cities WHERE trip_id=? AND position=0').get('trip-1');
+  database.db.prepare('UPDATE trip_cities SET payload=? WHERE trip_id=? AND position=0').run(JSON.stringify({...JSON.parse(row.payload),cityCode:'999999',cityName:'历史城'}),'trip-1');
+  const model=createTripForm({trip:service.getTrip('trip-1')});let n=0;const commands=[];
+  const controller=createFormController({api:{saveDraft:async(k,c)=>service.saveDraft(k,c),draft:async k=>service.getDraft(k),saveTrip:async(id,c)=>{commands.push(structuredClone(c));return service.saveTrip(id,c);},trip:async id=>service.getTrip(id)},model,draftKey:'edit:trip-1',slot:service.getDraft('edit:trip-1'),render:()=>{},navigate:()=>{},clock:{setTimeout:()=>1,clearTimeout:()=>{}},createId:()=>`legacy-${++n}`});
+  await controller.start();await controller.next();await controller.next();await controller.save();
+  assert.equal(controller.snapshot().errors.city_0,'请选择有效城市');assert.equal(controller.snapshot().step,'route');assert.equal(controller.snapshot().hasPendingSave,false);
+  assert.equal(model.toInput().cities[0].cityName,'历史城');assert.equal(service.getTrip('trip-1').revision,1);
+  controller.removeCity(0);controller.addCity({cityCode:'320100',cityName:'南京市',arrivalDate:'2026-10-10',departureDate:'2026-10-11'});controller.moveCity(1,0);await controller.next();await controller.save();
+  assert.equal(service.getTrip('trip-1').revision,2);assert.equal(service.getTrip('trip-1').cities[0].cityName,'南京市');assert.notEqual(commands[0].operationId,commands[1].operationId);
 });
 test('discard closes session and dispose prevents late rendering',async t=>{
   const rendered=[];const {controller,service}=editor(t,{render:s=>rendered.push(s)});await controller.start();await controller.discard();assert.equal(service.getDraft('new').state,'closed');controller.dispose();const count=rendered.length;controller.change('name','不能再写');await controller.next();assert.equal(rendered.length,count);assert.equal(service.getDraft('new').state,'closed');

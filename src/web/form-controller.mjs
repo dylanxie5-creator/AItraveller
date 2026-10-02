@@ -25,10 +25,21 @@ export function createFormController({api,model,draftKey,slot,render,navigate,co
     };
     const result=queue.then(run,run);queue=result.catch(()=>{});return result;
   }
-  const fail=failure=>{error=failure.message??'保存失败，当前输入仍保留';emit(false);};
-  function changed(action,full=false){if(disposed||busy)return;action();pendingSave=null;error='';cancel();emit(full);timer=clock.setTimeout(()=>flush().catch(fail),400);}
+  const fail=failure=>{
+    error=failure.message??'保存失败，当前输入仍保留';
+    if(['VALIDATION','CONFLICT'].includes(failure.code))pendingSave=null;
+    if(failure.code==='VALIDATION'&&failure.fields){
+      model.showErrors(failure.fields);
+      const keys=Object.keys(failure.fields);
+      if(keys.some(key=>['name','startDate','endDate','travelerCount','budgetYuan'].includes(key)))model.setStep('basic');
+      else if(keys.some(key=>key==='cities'||key.startsWith('city_')))model.setStep('route');
+      emit();
+    }else emit(false);
+  };
+  function unresolved(){if(!pendingSave)return false;error='提交结果尚未确认，请先点击确认保存重试；确认后可从详情重新编辑';emit(false);return true;}
+  function changed(action,full=false){if(disposed||busy||unresolved())return;action();error='';cancel();emit(full);timer=clock.setTimeout(()=>flush().catch(fail),400);}
   async function transition(direction) {
-    if(disposed||busy)return false;busy=true;emit(false);const oldStep=model.snapshot().step;
+    if(disposed||busy||unresolved())return false;busy=true;emit(false);const oldStep=model.snapshot().step;
     try{await flush();if(direction==='next'){if(!model.next()){emit();return false;}}else model.previous();await flush();emit();return true;}catch(failure){model.setStep(oldStep);fail(failure);return false;}finally{busy=false;emit(false);}
   }
   async function save() {
@@ -42,8 +53,8 @@ export function createFormController({api,model,draftKey,slot,render,navigate,co
   }
   return {snapshot,async start(){try{await flush();}catch(failure){fail(failure);}emit();},
     change:(field,value)=>changed(()=>model.change(field,value)),addCity:city=>changed(()=>model.addCity(city),true),changeCity:(i,f,v)=>changed(()=>model.changeCity(i,f,v)),moveCity:(a,b)=>changed(()=>model.moveCity(a,b),true),removeCity:i=>changed(()=>model.removeCity(i),true),next:()=>transition('next'),previous:()=>transition('previous'),save,retrySave:save,
-    async retryDraft(){if(disposed||busy)return;try{await flush();emit(false);}catch(failure){fail(failure);}},
-    async discard(){if(disposed||busy||!await confirm('确定舍弃当前未完成的草稿吗？'))return;busy=true;emit(false);try{await flush();await api.discardDraft(draftKey,{sessionId,revision:current.revision});disposed=true;cancel();navigate({type:'trips'});}catch(failure){fail(failure);}finally{busy=false;emit(false);}},
+    async retryDraft(){if(disposed||busy||unresolved())return;try{await flush();emit(false);}catch(failure){fail(failure);}},
+    async discard(){if(disposed||busy||unresolved()||!await confirm('确定舍弃当前未完成的草稿吗？'))return;busy=true;emit(false);try{await flush();await api.discardDraft(draftKey,{sessionId,revision:current.revision});disposed=true;cancel();navigate({type:'trips'});}catch(failure){fail(failure);}finally{busy=false;emit(false);}},
     async leave(){if(disposed)return true;if(busy)return false;if(pendingSave){error='请先重试保存，确认上一笔提交的结果';emit(false);return false;}try{await flush();return true;}catch(failure){fail(failure);return false;}},
     dispose(){disposed=true;cancel();}
   };

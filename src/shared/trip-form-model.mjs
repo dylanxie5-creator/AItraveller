@@ -16,6 +16,7 @@ export function createTripForm({trip=null,slot=null,createId=()=>crypto.randomUU
     next(){if(!validate())return false;const i=steps.indexOf(state.step);if(i<2)state.step=steps[i+1];return true;},
     previous(){state.step=steps[Math.max(0,steps.indexOf(state.step)-1)];clearErrors();},
     setStep(step){if(steps.includes(step))state.step=step;},
+    showErrors(fields){state.errors=structuredClone(fields);},
     rebase(revision){state.baseTripRevision=revision;},
     validate
   };
