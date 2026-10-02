@@ -1,0 +1,17 @@
+import {readFile,realpath} from 'node:fs/promises';
+import {resolve,sep} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const webFiles=new Set(['index.html','styles.css','app.mjs','api-client.mjs','router.mjs','views.mjs','form-controller.mjs','favicon.svg']);
+const sharedFiles=new Set(['date.mjs','money.mjs','trip-validation.mjs','trip-form-model.mjs']);
+export const defaultWebRoot=fileURLToPath(new URL('../web/',import.meta.url));
+export const defaultSharedRoot=fileURLToPath(new URL('../shared/',import.meta.url));
+export async function staticFile(path,{webRoot=defaultWebRoot,sharedRoot=defaultSharedRoot}={}) {
+  let root,name;if(path==='/'){root=webRoot;name='index.html';}
+  else if(path.startsWith('/web/')&&webFiles.has(path.slice(5))){root=webRoot;name=path.slice(5);}
+  else if(path.startsWith('/shared/')&&sharedFiles.has(path.slice(8))){root=sharedRoot;name=path.slice(8);}
+  else return null;
+  try {
+    const base=await realpath(root),file=await realpath(resolve(root,name));if(!file.startsWith(base+sep))return null;
+    const body=await readFile(file);const type=name.endsWith('.html')?'text/html':name.endsWith('.css')?'text/css':name.endsWith('.svg')?'image/svg+xml':'text/javascript';return {body,type:type+'; charset=utf-8'};
+  }catch{return null;}
+}
