@@ -1,4 +1,5 @@
 import {ValidationError} from '../shared/trip-validation.mjs';
+import {validateEndpoint} from './provider-registry.mjs';
 
 export const providerIds=Object.freeze(['deepseek','zhipu','mimo','kimi','qwen']);
 const invalid=field=>new ValidationError({[field]:'请检查模型、接口地址和密钥配置'});
@@ -18,9 +19,7 @@ export function validateProviderConfig(provider,config,previous) {
   const value=configRecord(config,['model','endpoint','keyAction','apiKey'],provider);
   if(typeof value.model!=='string'||!value.model.trim()||[...value.model].length>200||controls.test(value.model))throw invalid('model');
   if(typeof value.endpoint!=='string'||value.endpoint.length>2048||controls.test(value.endpoint))throw invalid('endpoint');
-  let url;try{url=new URL(value.endpoint);}catch{throw invalid('endpoint');}
-  // Task4 adds the official host/path registry before any external request exists.
-  if(url.protocol!=='https:'||url.username||url.password||url.hash||url.search||(url.port&&url.port!=='443'))throw invalid('endpoint');
+  const url=validateEndpoint(provider,value.endpoint);
   if(!['retain','replace','delete'].includes(value.keyAction))throw invalid('keyAction');
   if(value.keyAction!=='replace'&&value.apiKey!==undefined&&value.apiKey!=='')throw invalid('apiKey');
   if(value.keyAction==='retain'&&!previous?.keyCipher)throw invalid('apiKey');

@@ -142,8 +142,8 @@
 - `createHttpsTransport({lookup,requestImpl}={}) -> {postJson({provider,kind,url,headers,body,timeoutMs,maxBytes=1048576,signal}):Promise<object>}`；生产依赖 node:dns/promises 和 node:https，测试注入模拟网络，禁止真实网络。
 - `createZhipuSearch({transport,now}) -> {search({query,key,priorSources,signal}):Promise<Source[]>}`，使用任务 1 来源接口；一次调用最多一次 POST，不重试。
 
-- [ ] 写失败测试：HTTPS 之外、userinfo、fragment、query、异常端口、官方域名后缀伪造、path 编码绕过都拒绝；纯公网 DNS 通过，127/10/172.16/192.168、link-local、IPv6 回环、IPv4-mapped 内网、任一混合私网结果拒绝。连接必须使用被校验 IP，TLS servername 仍原主机；30x 抛错误且第二主机收到 0 Key／0 请求。超过 1 MiB、30 秒超时、非 JSON、外部含假 Key 的错误，返回的安全错误不能带原文。
-- [ ] 写搜索失败测试：完整路径和 Bearer、`search_std/false/5/medium` 精确匹配，query 不超过 70 字；失效 Key、1703／空结果均失败；检索时间与 publish_date 分开；摘要限长、URL 去重／清洗；原响应 icon/media 不自动下载。
+- [x] 写失败测试：HTTPS 之外、userinfo、fragment、query、异常端口、官方域名后缀伪造、path 编码绕过都拒绝；纯公网 DNS 通过，127/10/172.16/192.168、link-local、IPv6 回环、IPv4-mapped 内网、任一混合私网结果拒绝。连接必须使用被校验 IP，TLS servername 仍原主机；30x 抛错误且第二主机收到 0 Key／0 请求。超过 1 MiB、30 秒超时、非 JSON、外部含假 Key 的错误，返回的安全错误不能带原文。
+- [x] 写搜索失败测试：完整路径和 Bearer、`search_std/false/5/medium` 精确匹配，query 不超过 70 字；失效 Key、1703／空结果均失败；检索时间与 publish_date 分开；摘要限长、URL 去重／清洗；原响应 icon/media 不自动下载。
 
   ```js
   test('MiMo host suffix spoof is not an official endpoint', () => {
@@ -152,10 +152,12 @@
       e => e.code === 'VALIDATION');
   });
   ```
-- [ ] RED：`node --test tests/ai-transport.test.mjs tests/ai-search.test.mjs`。
-- [ ] 实现 registry 精确 host/path（官方资料核实后才增加）。禁止 socket 再自行解析未经校验地址；遍历 DNS 结果拒绝私有／保留地址，明确只连接已核验公网 IP；总超时包含 DNS 和读取。`postJson` 禁止 retry 和 redirect，失败仅归类鉴权／限流／超时／响应／网络，不保存原始响应。
-- [ ] GREEN＋回归：`node --test tests/ai-transport.test.mjs tests/ai-search.test.mjs tests/ai-settings.test.mjs`，0 failures。
-- [ ] `git diff --check`，提交本任务 Files：`feat: add guarded HTTPS transport and independent Zhipu search`。
+- [x] RED：`node --test tests/ai-transport.test.mjs tests/ai-search.test.mjs`。
+- [x] 实现 registry 精确 host/path（官方资料核实后才增加）。禁止 socket 再自行解析未经校验地址；遍历 DNS 结果拒绝私有／保留地址，明确只连接已核验公网 IP；总超时包含 DNS 和读取。`postJson` 禁止 retry 和 redirect，失败仅归类鉴权／限流／超时／响应／网络，不保存原始响应。
+- [x] GREEN＋回归：`node --test tests/ai-transport.test.mjs tests/ai-search.test.mjs tests/ai-settings.test.mjs`，0 failures。
+- [x] `git diff --check`，提交本任务 Files：`feat: add guarded HTTPS transport and independent Zhipu search`。
+
+2026-10-05 Task4 验证检查点：专项加设置回归 125/125 通过；全量 277 项，276 通过、0 失败、1 个原有 Windows 文件软链接权限跳过。全部网络为模拟 DNS/HTTPS，未用真实 Key，未调用付费接口，未接页面或重启正式网站。仅完成安全传输和独立搜索底层，等待用户确认 Task5。
 
 ## Task 5: 五平台模型适配与单次 JSON 攻略生成
 

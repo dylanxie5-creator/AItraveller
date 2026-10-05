@@ -82,8 +82,8 @@ test('job activation during encryption is rechecked inside the committing transa
   const pending=store.update(command());await waiting;setActive(true);release();await assert.rejects(pending,e=>e.code==='CONFLICT');assert.equal(raw(database),undefined);
 });
 test('host changes cannot carry retained keys to a new destination',async t=>{
-  const {database,store}=fixture(t);await store.update(command());const before=raw(database);
-  await assert.rejects(store.update(command(1,{deepseek:config('deepseek',{endpoint:'https://other.example.com/chat/completions',keyAction:'retain',apiKey:''})})),e=>e.code==='VALIDATION');assert.deepEqual(raw(database),before);
+  const {database,store}=fixture(t);await store.update(command(0,{qwen:config('qwen')}));const before=raw(database);
+  await assert.rejects(store.update(command(1,{qwen:config('qwen',{endpoint:'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',keyAction:'retain',apiKey:''})})),e=>e.code==='VALIDATION');assert.deepEqual(raw(database),before);
 });
 test('SQL commit failure rolls back settings revision and encrypted values',async t=>{
   const {database,store}=fixture(t);await store.update(command());const before=raw(database);database.db.exec("CREATE TRIGGER fail_settings BEFORE UPDATE ON ai_settings BEGIN SELECT RAISE(ABORT,'injected'); END");
@@ -141,9 +141,9 @@ test('configuration getters never execute and exact size boundaries are not trun
   const result=validateProviderConfig('deepseek',config('deepseek',{model:'模'.repeat(200),apiKey:'K'.repeat(4096)}),null);assert.equal(result.model.length,200);assert.equal(result.apiKey.length,4096);
 });
 test('explicitly deleting a key permits changing host without transferring a credential',async t=>{
-  const {store}=fixture(t);await store.update(command());
-  await store.update(command(1,{deepseek:config('deepseek',{endpoint:'https://other.example.com/chat/completions',keyAction:'delete',apiKey:''})}));
-  assert.equal(store.getPublic().providers.deepseek.keyConfigured,false);await assert.rejects(store.resolveCredentials('deepseek',2),e=>e.code==='AI_KEY_REQUIRED');
+  const {store}=fixture(t);await store.update(command(0,{qwen:config('qwen')}));
+  await store.update(command(1,{qwen:config('qwen',{endpoint:'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',keyAction:'delete',apiKey:''})}));
+  assert.equal(store.getPublic().providers.qwen.keyConfigured,false);await assert.rejects(store.resolveCredentials('qwen',2),e=>e.code==='AI_KEY_REQUIRED');
 });
 test('settings success and failure emit no sensitive console diagnostics',async t=>{
   const logged=[];for(const method of ['log','warn','error','info','debug'])t.mock.method(console,method,(...args)=>{logged.push(args.map(String).join(' '));});

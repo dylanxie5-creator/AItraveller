@@ -52,7 +52,17 @@ Key 使用 Windows DPAPI `CurrentUser` 保存为密文，不进入命令行参�
 
 公开设置只返回模型、地址、版本和配置状态，不返回 Key、片段或密文。“已配置”只表示已有密文，不代表 API 权限、余额或真实调用已验证。活动任务期间不能保存设置；加密等待期间版本或任务状态变化也会拒绝提交。
 
-**设置页、AI HTTP 接口和真实平台请求尚未接入，当前无需输入 Key。** 官方地址白名单与安全传输属于下一项，现有底层 HTTPS 格式校验不代表外部地址已获允许。Windows 实测使用的均是假 Key，正式数据库没有保存测试设置。
+**设置页、AI HTTP 接口和真实平台请求尚未接入，当前无需输入 Key。** Windows 实测使用的均是假 Key，正式数据库没有保存测试设置。
+
+### AI 安全传输与搜索底层进度
+
+已实现完整 HTTPS 接口地址白名单，设置保存也共用此规则。地址必须匹配平台、主机与完整路径；不接受任意代理、编码路径、用户信息、查询串、片段或异常端口。白名单依据官方资料核对：[DeepSeek](https://api-docs.deepseek.com/)、[智谱](https://docs.bigmodel.cn/api-reference/工具-api/网络搜索)、[MiMo](https://mimo.mi.com/docs/zh-CN/quick-start/summary/first-api-call)、[Kimi](https://www.kimi.com/help/kimi-api/api-troubleshooting)、[千问地域与业务空间](https://help.aliyun.com/zh/model-studio/regions)。MiMo 暂限普通实时接口，不含批处理/Token Plan；千问保留官方旧版域名和已核实地域的单层业务空间域名，不自动切换地域或迁移 Key。
+
+网络层检查全部 DNS 结果，只连接已核验的公网 IP，并用原域名校验 TLS 证书；混合私网结果也会拒绝。不跟随重定向，不自动重试，不访问搜索来源网页、图标或媒体。特殊用途/映射/转换地址保守拒绝，不支持依赖这些地址的自定义网络。[IANA IPv4 地址登记](https://www.iana.org/assignments/iana-ipv4-special-registry)、[IPv6 地址登记](https://www.iana.org/assignments/iana-ipv6-special-registry)
+
+智谱独立搜索固定调用 `web_search`，搜索词最多 70 个 Unicode 字符；30 秒总超时包含 DNS 和响应读取，响应最多 1 MiB。无有效来源即失败；来源清洗、去重和限长，检索时间与文章发布日期分别保存。错误仅返回本地分类，不保留平台原始报错或密钥。模型调用最长 120 秒的传输底座已准备，但五平台模型适配属于下一项。
+
+上述网络测试全部注入模拟 DNS/HTTPS，不产生真实或付费 API 请求；这不代表账户权限、余额、模型能力或平台可用性已实测。
 
 ### 运行测试
 
@@ -61,4 +71,4 @@ npm test
 git diff --check
 ```
 
-自动化测试包含领域规则、SQLite 重启/事务与迁移备份、Windows 实际排他句柄/进程崩溃、DPAPI 假 Key 实测与脱敏设置并发保护、草稿身份、HTTP 同源防护及前端控制器。真实浏览器的已测项和未测项见 `docs/web-foundation-acceptance.md`。
+自动化测试包含领域规则、SQLite 重启/事务与迁移备份、Windows 实际排他句柄/进程崩溃、DPAPI 假 Key 实测与脱敏设置并发保护、HTTPS 白名单/DNS 固定连接/总超时/安全错误/智谱搜索模拟、草稿身份、HTTP 同源防护及前端控制器。真实浏览器的已测项和未测项见 `docs/web-foundation-acceptance.md`。
