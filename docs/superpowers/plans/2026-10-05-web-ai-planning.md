@@ -167,8 +167,8 @@
 - `buildPlanningMessages(request:AiRequest,sources:Source[]) -> [{role:'system',content},{role:'user',content}]`；资料作为分隔后的 JSON 数据，不引用其他行程；不包含 Key 或工具定义。
 - `createModelAdapters({transport}) -> {generate({provider,model,endpoint,key,request,sources,signal}):Promise<{content:string,usage:object|null}>}`。不同平台配置对应合法 token 参数；只读 `choices[0].message.content`，非正常完成、工具输出或空正文拒绝，不把 reasoning_content 当攻略。
 
-- [ ] 只读核对设计 §9 的五个平台最新官方接口，写 `docs/ai-provider-contracts.md`，逐个平台记录核对日／URL、完整 path、鉴权、8,192 token 参数、非流式响应、已确认文本模型及是否明确禁用思考；无准确契约的一个平台停止其适配，不以其他四个平台通过宣告五平台完成。MiMo 的缺口已于 2026-10-05 从官方中文完整 Chat 文档核实：`https://api.xiaomimimo.com/v1/chat/completions`、`api-key`、`max_completion_tokens`、`stream=false`、`thinking.type=disabled`；重新核对后写入 fixture。Qwen 将官方地域／业务空间主机与 path 一起校验。
-- [ ] 写失败测试，五个平台 parameterized captures 断言：精确目的地、独立 Key、平台正确鉴权和 token 上限 8192、无 tools／搜索工具、只一次 request、用户自填 model 原样传递、stream false。MiMo 不盲用另一个平台的 max_tokens。Key 401／429、finish_reason=length/tool_calls/content_filter、无 choices／正文、非法 JSON 均不给第二次修复或回退调用；恶意搜索摘要只位于 user 数据，不变成 system 内容。normalizePlanContent 对真实内容的校验在任务 6 完成。
+- [x] 只读核对设计 §9 的五个平台最新官方接口，写 `docs/ai-provider-contracts.md`，逐个平台记录核对日／URL、完整 path、鉴权、8,192 token 参数、非流式响应、已确认文本模型及是否明确禁用思考；无准确契约的一个平台停止其适配，不以其他四个平台通过宣告五平台完成。MiMo 的缺口已于 2026-10-05 从官方中文完整 Chat 文档核实：`https://api.xiaomimimo.com/v1/chat/completions`、`api-key`、`max_completion_tokens`、`stream=false`、`thinking.type=disabled`；重新核对后写入 fixture。Qwen 将官方地域／业务空间主机与 path 一起校验。
+- [x] 写失败测试，五个平台 parameterized captures 断言：精确目的地、独立 Key、平台正确鉴权和 token 上限 8192、无 tools／搜索工具、只一次 request、用户自填 model 原样传递、stream false。MiMo 不盲用另一个平台的 max_tokens。Key 401／429、finish_reason=length/tool_calls/content_filter、无 choices／正文、非法 JSON 均不给第二次修复或回退调用；恶意搜索摘要只位于 user 数据，不变成 system 内容。normalizePlanContent 对真实内容的校验在任务 6 完成。
 
   ```js
   test('MiMo sends one capped nonstream request with its own header', async () => {
@@ -186,10 +186,12 @@
     assert.equal(calls[0].body.tools,undefined);
   });
   ```
-- [ ] RED：`node --test tests/ai-models.test.mjs`。
-- [ ] 实现适配和固定 JSON schema 提示，明确信息不足可写保守建议、不能伪造引用；不承诺平台强制 JSON 支持，未核实的 response_format／temperature 参数不添加。每平台契约决定参数，使用同一 HTTPS 防护。usage 只提取有界数值摘要，缺失不伪造费用；自填非兼容模型报清晰错误。
-- [ ] GREEN：`node --test tests/ai-models.test.mjs tests/ai-domain.test.mjs tests/ai-transport.test.mjs`，每平台模拟协议结果分别记录。
-- [ ] `git diff --check`，提交本任务 Files：`feat: adapt five selectable text models for travel planning`；禁止在此任务要求聊天里提供 Key 或实发付费请求。
+- [x] RED：`node --test tests/ai-models.test.mjs`。
+- [x] 实现适配和固定 JSON schema 提示，明确信息不足可写保守建议、不能伪造引用；不承诺平台强制 JSON 支持，未核实的 response_format／temperature 参数不添加。每平台契约决定参数，使用同一 HTTPS 防护。usage 只提取有界数值摘要，缺失不伪造费用；自填非兼容模型报清晰错误。
+- [x] GREEN：`node --test tests/ai-models.test.mjs tests/ai-domain.test.mjs tests/ai-transport.test.mjs`，每平台模拟协议结果分别记录。
+- [x] `git diff --check`，提交本任务 Files：`feat: adapt five selectable text models for travel planning`；禁止在此任务要求聊天里提供 Key 或实发付费请求。
+
+2026-10-05 Task5 验证检查点：五平台模型专项 55 项，结合领域/传输回归 211/211 通过；全量 332 项，331 通过、0 失败、1 个原有 Windows 文件软链接权限跳过。官方契约已写入 `docs/ai-provider-contracts.md`，Kimi 使用当前 `max_completion_tokens`，千问按已核实型号区分新旧字段。不使用真实 Key 或付费调用，不接 UI/任务运行；等待用户确认 Task6。
 
 ## Task 6: 持久化任务、调用预约与刷新／重启恢复
 

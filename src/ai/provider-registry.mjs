@@ -15,6 +15,21 @@ function qwenWorkspace(host) {
 }
 export const zhipuSearchEndpoint='https://open.bigmodel.cn/api/paas/v4/web_search';
 
+// Model-specific switches are deliberately exact: custom names are not guessed.
+const nonThinking={
+  deepseek:new Set(['deepseek-flash','deepseek-v4-pro']),
+  zhipu:new Set(['glm-4.7','glm-5.2']),
+  mimo:new Set(['mimo-v2.6-flash','mimo-v2.6-pro','mimo-v2.6-pro-ultraspeed','mimo-v2.5-pro','mimo-v2.5']),
+  kimi:new Set(['kimi-k2.6']),
+  qwen:new Set(['qwen-plus','qwen-flash','qwen-turbo','qwen3.5-plus','qwen3.5-flash','qwen3.6-plus','qwen3.6-flash','qwen3.7-plus','qwen3.7-flash','qwen3.7-max'])
+};
+const qwenCompletionCap=new Set(['qwen3.5-plus','qwen3.5-flash','qwen3.6-plus','qwen3.6-flash','qwen3.7-plus','qwen3.7-flash','qwen3.7-max','qwen3.8-max','qwen3.8-flash']);
+export function modelRequestOptions(provider,model) {
+  if(typeof provider!=='string'||!Object.hasOwn(nonThinking,provider)||typeof model!=='string')throw invalid();
+  const completion=provider==='mimo'||provider==='kimi'||(provider==='qwen'&&qwenCompletionCap.has(model));
+  return {[completion?'max_completion_tokens':'max_tokens']:8192,...(nonThinking[provider].has(model)?provider==='qwen'?{enable_thinking:false}:{thinking:{type:'disabled'}}:{})};
+}
+
 /** Validate the original spelling as well as the URL parser's normalized result. */
 export function validateEndpoint(provider,value,kind='model') {
   if(typeof value!=='string'||value.length>2048||/[^\x21-\x7e]|[%\\?#]/u.test(value))throw invalid();
