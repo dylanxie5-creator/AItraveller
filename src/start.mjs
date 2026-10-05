@@ -2,20 +2,46 @@ import {createServer} from 'node:http';
 import {mkdirSync} from 'node:fs';
 import {dirname,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {openDatabase} from './storage/database.mjs';
+import {prepareDatabase} from './storage/database.mjs';
+import {acquireDatabaseLock,canonicalDatabasePath} from './platform/database-lock.mjs';
+import {StoreError} from './storage/errors.mjs';
 import {createTravelService} from './services/travel-service.mjs';
 import {createHttpApp} from './server/http-app.mjs';
-export async function startServer({dbPath=fileURLToPath(new URL('../runtime/travel.sqlite',import.meta.url)),port=3210,host='127.0.0.1'}={}) {
+export async function startServer({dbPath=fileURLToPath(new URL('../runtime/travel.sqlite',import.meta.url)),port=3210,host='127.0.0.1',lockFactory=acquireDatabaseLock}={}) {
   if(host!=='127.0.0.1')throw new Error('Only loopback is supported');
-  mkdirSync(dirname(dbPath),{recursive:true});const database=openDatabase(dbPath);const server=createServer();
-  try{await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,resolve);});}catch(error){database.close();throw error;}
-  const actual=server.address().port;server.on('request',createHttpApp({service:createTravelService({database}),allowedHosts:[`127.0.0.1:${actual}`,`localhost:${actual}`]}));
-  return {server,url:`http://127.0.0.1:${actual}`,async close(){await new Promise(r=>server.close(r));database.close();}};
+  mkdirSync(dirname(dbPath),{recursive:true});dbPath=canonicalDatabasePath(dbPath);const ownership=await lockFactory(dbPath);
+  const server=createServer();const controller=new AbortController();let database,starting=true,ownershipLost=false,closing,resolveClosed;
+  const closed=new Promise(resolve=>{resolveClosed=resolve;});
+  const guard=()=>{if(ownershipLost)throw new StoreError('DATABASE_LOCK_LOST','数据库保护已失效，网站已停止，请重新启动');};
+  async function close() {
+    if(closing)return closing;
+    controller.abort(new StoreError('SERVER_STOPPED','网站已停止'));
+    closing=(async()=>{
+      try {
+        if(server.listening){const stopped=new Promise(resolve=>server.close(resolve));server.closeAllConnections();await stopped;}
+      }finally {try{database?.close();}finally{await ownership.release();resolveClosed({ownershipLost});}}
+    })();return closing;
+  }
+  ownership.lost.then(()=>{
+    ownershipLost=true;controller.abort(new StoreError('DATABASE_LOCK_LOST','数据库保护已失效'));
+    if(!starting)void close();
+  });
+  try {
+    guard();database=await prepareDatabase(dbPath,{signal:controller.signal});guard();
+    await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,()=>{server.off('error',reject);resolve();});});guard();
+    const actual=server.address().port;const app=createHttpApp({service:createTravelService({database}),allowedHosts:[`127.0.0.1:${actual}`,`localhost:${actual}`]});
+    server.on('request',(request,response)=>{
+      if(ownershipLost||closing){response.writeHead(503);response.end();return;}
+      app(request,response);
+    });
+    starting=false;return {server,url:`http://127.0.0.1:${actual}`,closed,signal:controller.signal,close};
+  }catch(error){starting=false;await close();throw error;}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
   try {
     const running=await startServer({port:process.env.TRAVEL_PORT?Number(process.env.TRAVEL_PORT):3210, ...(process.env.TRAVEL_DB_PATH?{dbPath:resolve(process.env.TRAVEL_DB_PATH)}:{})});
     console.log(`智游足迹已启动：${running.url}`);
+    running.closed.then(({ownershipLost})=>{if(ownershipLost){console.error('数据库保护已失效，网站已安全停止');process.exitCode=1;}});
     const stop=async()=>{await running.close();process.exit(0);};process.once('SIGINT',stop);process.once('SIGTERM',stop);
   }catch(error){console.error('无法启动本机旅行网站：',error.code??error.name);process.exitCode=1;}
 }

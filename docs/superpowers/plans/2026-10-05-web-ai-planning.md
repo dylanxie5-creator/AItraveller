@@ -90,7 +90,7 @@
 - `acquireDatabaseLock(path) -> Promise<{release():Promise<void>,lost:Promise<void>}>`：Windows 固定脚本持有 canonical DB 路径旁 `.owner.lock` 的 `FileShare.None` 文件流；READY 后才算获得，关 stdin／进程结束释放。进程崩溃不需删除锁文件；lost 意外完成时服务器立即拒绝新请求、终止外部请求并退出。
 - v2 新表 `ai_settings(id=1,revision,payload)`、`ai_jobs(id,operation_id UNIQUE,request_hash,state,payload)`、`ai_plans(id,revision,payload)`、`ai_conversions(plan_id PRIMARY KEY,trip_id UNIQUE,status,payload)`；以 partial UNIQUE index 对 queued/searching/generating 状态常量保证仅一活动任务；conversion 不级联删除攻略。
 
-- [ ] 写失败测试：v1 fixtures 包含正式行程、活草稿、关闭墓碑、save_receipts；升级备份中仍 v1，全部原值不变，新表／索引可用；备份或 DDL 失败不改原库；版本 3、非空无 metadata、坏文件字节不变。原 storage 测试的“未知版本 2”改为 3，仅改变预期版本意义。两个不同端口／等价路径同时启动第二者拒绝，首进程被杀后可取得锁；helper 退出后主服务不能继续收费。
+- [x] 写失败测试：v1 fixtures 包含正式行程、活草稿、关闭墓碑、save_receipts；升级备份中仍 v1，全部原值不变，新表／索引可用；备份或 DDL 失败不改原库；版本 3、非空无 metadata、坏文件字节不变。原 storage 测试的“未知版本 2”改为 3，仅改变预期版本意义。两个不同端口／等价路径同时启动第二者拒绝，首进程被杀后可取得锁；helper 退出后主服务不能继续收费。
 
   ```js
   test('version 3 is rejected without modifying its bytes', t => {
@@ -101,10 +101,12 @@
     assert.deepEqual(readFileSync(path), before);
   });
   ```
-- [ ] RED：`node --test tests/ai-migration.test.mjs tests/database-lock.test.mjs`。
-- [ ] 实现接口；规范化真实父目录和 Windows 路径大小写，防止等价路径取得两个锁。`startServer` 在打开数据库前获取锁，再 prepareDatabase；所有失败分支释放资源。release 幂等，预期主动释放不触发 lost 故障关闭；启动部分失败也必须关 helper。固定 PowerShell File 参数传路径但无 Key；禁止执行字符串拼接脚本。测试仅在独立 mkdtemp 内建库。
-- [ ] GREEN＋回归：`node --test tests/ai-migration.test.mjs tests/database-lock.test.mjs tests/storage.test.mjs tests/travel-service.test.mjs tests/http.test.mjs`。Windows 实机锁测试必须运行，不能用“不支持”跳过后声称通过。
-- [ ] `git diff --check`，提交本任务 Files：`feat: protect AI database migration and single-process ownership`。实际 runtime 数据只在后续启动时升级，不在此任务操作用户数据库。
+- [x] RED：`node --test tests/ai-migration.test.mjs tests/database-lock.test.mjs`。
+- [x] 实现接口；规范化真实父目录和 Windows 路径大小写，防止等价路径取得两个锁。`startServer` 在打开数据库前获取锁，再 prepareDatabase；所有失败分支释放资源。release 幂等，预期主动释放不触发 lost 故障关闭；启动部分失败也必须关 helper。固定 PowerShell File 参数传路径但无 Key；禁止执行字符串拼接脚本。测试仅在独立 mkdtemp 内建库。
+- [x] GREEN＋回归：`node --test tests/ai-migration.test.mjs tests/database-lock.test.mjs tests/storage.test.mjs tests/travel-service.test.mjs tests/http.test.mjs`。Windows 实机锁测试必须运行，不能用“不支持”跳过后声称通过。
+- [x] `git diff --check`，提交本任务 Files：`feat: protect AI database migration and single-process ownership`。实际 runtime 数据只在后续启动时升级，不在此任务操作用户数据库。
+
+2026-10-05 Task2 验证检查点：全量 147 项测试，146 通过、0 失败、1 个原有文件软链接权限跳过项；迁移与 Windows 实际进程独占测试未跳过。正式 runtime 未启动/升级，未调用 AI API。执行证据保存在本工作区的 `.superpowers/sdd/2026-10-05-web-ai-planning/`，后续先等待用户确认 Task3。
 
 ## Task 3: Windows Key 加密与脱敏设置仓库
 

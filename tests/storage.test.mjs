@@ -16,7 +16,7 @@ test('trip cities and drafts survive database close and reopen',t=>{
 });
 test('corrupt newer and unversioned databases remain untouched',t=>{
   const {path,database}=setup(t); database.close();
-  const raw=new DatabaseSync(path); raw.prepare('UPDATE metadata SET version=2').run();raw.close();
+  const raw=new DatabaseSync(path); raw.prepare('UPDATE metadata SET version=3').run();raw.close();
   const before=readFileSync(path);assert.throws(()=>openDatabase(path),e=>e.code==='STORAGE_VERSION');assert.deepEqual(readFileSync(path),before);
   writeFileSync(path,'not a database'); const corrupt=readFileSync(path);assert.throws(()=>openDatabase(path),e=>e.code==='STORAGE_CORRUPT');assert.deepEqual(readFileSync(path),corrupt);
 });
