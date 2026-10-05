@@ -44,9 +44,21 @@ npm start
 
 ## 检查
 
+### AI 设置底层进度
+
+已实现五个平台独立的模型名/接口配置与版本保护，以及 Key 的保留、替换、明确删除。智谱搜索可复用智谱模型 Key，也可保存独立搜索 Key；切换复用模式不会自动删除独立 Key，需明确删除。
+
+Key 使用 Windows DPAPI `CurrentUser` 保存为密文，不进入命令行参数、环境变量或日志；失败不改存量密文，也不降级为明文。一般绑定当前 Windows 用户/计算机，迁移账户或电脑可能需要重填。它不能防御已控制同一用户账号的恶意软件，也不能替代平台侧撤销凭据。[Microsoft 数据保护说明](https://learn.microsoft.com/en-us/dotnet/standard/security/how-to-use-data-protection)
+
+公开设置只返回模型、地址、版本和配置状态，不返回 Key、片段或密文。“已配置”只表示已有密文，不代表 API 权限、余额或真实调用已验证。活动任务期间不能保存设置；加密等待期间版本或任务状态变化也会拒绝提交。
+
+**设置页、AI HTTP 接口和真实平台请求尚未接入，当前无需输入 Key。** 官方地址白名单与安全传输属于下一项，现有底层 HTTPS 格式校验不代表外部地址已获允许。Windows 实测使用的均是假 Key，正式数据库没有保存测试设置。
+
+### 运行测试
+
 ```powershell
 npm test
 git diff --check
 ```
 
-自动化测试包含领域规则、SQLite 重启/事务与迁移备份、Windows 实际排他句柄/进程崩溃、草稿身份、HTTP 同源防护及前端控制器。真实浏览器的已测项和未测项见 `docs/web-foundation-acceptance.md`。
+自动化测试包含领域规则、SQLite 重启/事务与迁移备份、Windows 实际排他句柄/进程崩溃、DPAPI 假 Key 实测与脱敏设置并发保护、草稿身份、HTTP 同源防护及前端控制器。真实浏览器的已测项和未测项见 `docs/web-foundation-acceptance.md`。

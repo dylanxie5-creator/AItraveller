@@ -117,7 +117,7 @@
 - `validateProviderConfig(provider,config,previous) -> {model,endpoint,keyAction,apiKey?}`；model 非空≤200 字，禁止控制字符；密钥 replace 必须非空≤4096 字且无控制字符，不截断；首次配置不能 retain 不存在的 Key。地址合法性由任务 4 的 endpoint 规则最终发送前复验。
 - `createAiSettingsStore(database,{protector,isJobActive}) -> {getPublic(),update(command):Promise<PublicSettings>,resolveCredentials(provider,expectedRevision):Promise<{model,endpoint,modelKey,searchKey}>}`。resolveCredentials 只被任务服务调用，禁止 HTTP 直接暴露。
 
-- [ ] 写失败测试：假 Key 加密字节中无原文，同用户另起 helper 解密；不存在支持则报错而非明文；错误密文不被 retain／失败 replace 擦除，显式 replace 或 delete 可恢复。GET 不含 Key／密文／片段；空留存、明确删、复用智谱搜索、删除复用者状态失效、主机变更无新 Key 拒绝、旧 revision 冲突、活动任务所有设置变更拒绝。模拟日志／进程调用捕获不到假 Key。
+- [x] 写失败测试：假 Key 加密字节中无原文，同用户另起 helper 解密；不存在支持则报错而非明文；错误密文不被 retain／失败 replace 擦除，显式 replace 或 delete 可恢复。GET 不含 Key／密文／片段；空留存、明确删、复用智谱搜索、删除复用者状态失效、主机变更无新 Key 拒绝、旧 revision 冲突、活动任务所有设置变更拒绝。模拟日志／进程调用捕获不到假 Key。
 
   ```js
   test('CurrentUser fake key survives a separate protector instance', async () => {
@@ -126,10 +126,12 @@
     assert.equal(await createDpapiProtector().unprotect(cipher), 'FAKE-QA-KEY-ONLY');
   });
   ```
-- [ ] RED：`node --test tests/dpapi.test.mjs tests/ai-settings.test.mjs`。
-- [ ] 实现；加密在事务外等待，提交前事务内再次检查 revision 和活动任务，避免等待期间生成启动。输入清空由网页任务完成，服务不声称已验证权限；decryption failure 不改已有密文。
-- [ ] GREEN：同一命令 0 failures；`npm test` 无新增失败。独立 Windows DPAPI 测试要真实加解密假 Key，不只 mock。
-- [ ] `git diff --check`，提交本任务 Files：`feat: store masked AI settings with Windows user encryption`。
+- [x] RED：`node --test tests/dpapi.test.mjs tests/ai-settings.test.mjs`。
+- [x] 实现；加密在事务外等待，提交前事务内再次检查 revision 和活动任务，避免等待期间生成启动。输入清空由网页任务完成，服务不声称已验证权限；decryption failure 不改已有密文。
+- [x] GREEN：同一命令 0 failures；`npm test` 无新增失败。独立 Windows DPAPI 测试要真实加解密假 Key，不只 mock。
+- [x] `git diff --check`，提交本任务 Files：`feat: store masked AI settings with Windows user encryption`。
+
+2026-10-05 Task3 验证检查点：设置/DPAPI 39 项通过，包含 Windows 真加解密假 Key 与数据库重开；全量 186 项，185 通过、0 失败、1 个原有文件软链接权限跳过。未接入设置页、HTTP AI 接口或真实平台调用，正式数据未修改；等待用户确认 Task4。
 
 ## Task 4: 安全 HTTPS 传输与智谱独立搜索
 
