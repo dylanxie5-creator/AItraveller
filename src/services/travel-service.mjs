@@ -1,12 +1,13 @@
 import {createHash} from 'node:crypto';
 import {createTripStore} from '../storage/trip-store.mjs';
 import {createDraftStore} from '../storage/draft-store.mjs';
+import {createAiConversionStore} from '../storage/ai-conversion-store.mjs';
 import {conflict,missing,validId,validRevision} from '../storage/errors.mjs';
 import {normalizeTripInput,ValidationError} from '../shared/trip-validation.mjs';
 import {getCityByCode} from '../domain/city-catalog.mjs';
 import {getTripStatus,todayDateOnly} from '../shared/date.mjs';
 function canonical(value) {if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])]));return value;}
-export function createTravelService({database,today=todayDateOnly,now=()=>new Date().toISOString()}) {
+export function createTravelService({database,today=todayDateOnly,now=()=>new Date().toISOString(),conversionStore=createAiConversionStore(database)}) {
   const trips=createTripStore(database),drafts=createDraftStore(database),{db}=database;
   const getTrip=id=>{const trip=trips.get(id);if(!trip)throw missing();return trip;};
   return {listTrips:trips.list,getTrip,getDraft:drafts.get,
@@ -31,7 +32,7 @@ export function createTravelService({database,today=todayDateOnly,now=()=>new Da
         db.prepare('INSERT INTO save_receipts VALUES(?,?,?,?)').run(command.operationId,id,hash,JSON.stringify(trip));return trip;
       });
     },deleteTrip(id,revision){return database.transaction(()=>{
-      trips.remove(id,revision);const slot=drafts.get(`edit:${id}`);if(slot.state==='active')drafts.close(slot.key,{sessionId:slot.sessionId,revision:slot.revision});return true;
+      trips.remove(id,revision);const slot=drafts.get(`edit:${id}`);if(slot.state==='active')drafts.close(slot.key,{sessionId:slot.sessionId,revision:slot.revision});conversionStore.markDeleted(id);return true;
     });}
   };
 }
