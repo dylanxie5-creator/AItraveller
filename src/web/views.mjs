@@ -25,6 +25,7 @@ export function renderView(root,state,actions) {
   }else{
     const t=state.trip;root.append(el('section',{class:'detail-summary'},el('span',{class:`badge ${t.status}`},t.statusLabel),el('p',{class:'detail-date'},`${t.startDate} — ${t.endDate}`),el('div',{class:'detail-facts'},el('span',{},`${t.travelerCount} 人出行`),el('span',{},`预算 ${t.budgetText}`))));
     root.append(el('section',{class:'timeline-panel'},el('h2',{},'城市路线'),el('ol',{class:'timeline'},t.cities.map((city,i)=>el('li',{},el('span',{class:'city-number'},String(i+1).padStart(2,'0')),el('div',{},el('h3',{},city.cityName),el('p',{},`${city.arrivalDate} — ${city.departureDate}`),el('span',{class:'muted'},city.provinceName)))))));
+    if(state.guide)root.append(el('section',{class:'guide-link'},el('div',{},el('h2',{},'由 AI 攻略创建'),el('p',{},state.guide.status==='deleted'?'正式行程已删除，转换时的冻结快照仍保留。':'正式行程保存的是转换时快照；当前攻略可继续独立编辑。')),button('查看当前原攻略',()=>actions.navigate({type:'ai-plan',id:state.guide.planId}),'secondary')));
     root.append(el('p',{'data-delete-error':'',class:'form-error',hidden:true,role:'alert'}),el('div',{class:'detail-actions'},button('编辑行程',()=>actions.navigate({type:'edit',id:t.id})),button('删除行程',()=>actions.deleteTrip(t),'danger'),button('返回列表',()=>actions.navigate({type:'trips'}),'secondary')));
   }
 }

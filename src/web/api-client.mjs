@@ -8,5 +8,13 @@ export function createApiClient({fetchImpl=globalThis.fetch,baseUrl=''}={}) {
     return payload.data;
   }
   const key=k=>encodeURIComponent(k);
-  return {overview:()=>call('/api/overview'),trips:()=>call('/api/trips'),trip:id=>call('/api/trips/'+key(id)),cities:q=>call('/api/cities?q='+key(q)),draft:k=>call('/api/drafts/'+key(k)),saveDraft:(k,c)=>call('/api/drafts/'+key(k),'PUT',c),discardDraft:(k,c)=>call('/api/drafts/'+key(k),'DELETE',c),saveTrip:(id,c)=>call('/api/trips/'+key(id),'PUT',c),deleteTrip:(id,revision)=>call('/api/trips/'+key(id),'DELETE',{expectedTripRevision:revision})};
+  return {
+    overview:()=>call('/api/overview'),trips:()=>call('/api/trips'),trip:id=>call('/api/trips/'+key(id)),cities:q=>call('/api/cities?q='+key(q)),
+    draft:k=>call('/api/drafts/'+key(k)),saveDraft:(k,c)=>call('/api/drafts/'+key(k),'PUT',c),discardDraft:(k,c)=>call('/api/drafts/'+key(k),'DELETE',c),
+    saveTrip:(id,c)=>call('/api/trips/'+key(id),'PUT',c),deleteTrip:(id,revision)=>call('/api/trips/'+key(id),'DELETE',{expectedTripRevision:revision}),
+    aiSettings:()=>call('/api/ai/settings'),saveAiSettings:command=>call('/api/ai/settings','PUT',command),
+    aiJobs:()=>call('/api/ai/jobs'),aiJob:id=>call('/api/ai/jobs/'+key(id)),startAiJob:command=>call('/api/ai/jobs','POST',command),
+    aiPlans:()=>call('/api/ai/plans'),aiPlan:id=>call('/api/ai/plans/'+key(id)),updateAiPlan:(id,command)=>call('/api/ai/plans/'+key(id),'PUT',command),
+    convertAiPlan:(id,command)=>call('/api/ai/plans/'+key(id)+'/convert','POST',command),tripGuide:id=>call('/api/ai/trips/'+key(id)+'/guide')
+  };
 }
