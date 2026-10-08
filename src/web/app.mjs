@@ -40,7 +40,7 @@ if(typeof document!=='undefined') {
     await editor.start();
   }});
   let ai;
-  const createAi=()=>createAiController({api,render:state=>renderAiView(root,state,{navigate,retry:r=>ai.load(r),submit:values=>ai.submit(values),retrySubmit:()=>ai.retrySubmit(),saveSettings:command=>ai.saveSettings(command),convert:plan=>ai.convert(plan)}),navigate,confirm:message=>window.confirm(message)});
+  const createAi=initialDraft=>createAiController({api,render:state=>renderAiView(root,state,{navigate,retry:r=>ai.load(r),submit:values=>ai.submit(values),retrySubmit:()=>ai.retrySubmit(),saveSettings:command=>ai.saveSettings(command),convert:plan=>ai.convert(plan),reuseJob:job=>ai.reuseJob(job)}),navigate,confirm:message=>window.confirm(message),initialDraft});
   ai=createAi();
   async function loadRoute(route) {
     document.querySelectorAll('[data-nav]').forEach(node=>node.classList.toggle('active',node.dataset.nav===(route.type==='home'?'home':route.type==='trips'||['detail','edit','new'].includes(route.type)?'trips':route.type==='ai-settings'?'ai-settings':'ai')));
@@ -61,7 +61,7 @@ if(typeof document!=='undefined') {
       const targetHash=location.hash;
       if(editor){if(!await editor.leave()){suppressHash=activeHash;location.hash=activeHash;return;}editor.dispose();editor=null;}
       if(aiEditor){if(!await aiEditor.leave()){suppressHash=activeHash;location.hash=activeHash;return;}aiEditor.dispose();aiEditor=null;}
-      ai.dispose();ai=createAi();activeHash=targetHash;await loadRoute(parseRoute(targetHash));
+      const retainedAiDraft=ai.snapshot().draft;ai.dispose();ai=createAi(retainedAiDraft);activeHash=targetHash;await loadRoute(parseRoute(targetHash));
     }).catch(()=>{});
   });
   window.addEventListener('beforeunload',event=>{if((editor&&(editor.snapshot().dirty||editor.snapshot().busy||editor.snapshot().hasPendingSave))||(aiEditor&&aiEditor.snapshot().dirty)){event.preventDefault();event.returnValue='';}});

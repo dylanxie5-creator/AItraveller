@@ -5,9 +5,10 @@ import {createApiClient} from '../src/web/api-client.mjs';
 import {createAiController} from '../src/web/ai-controller.mjs';
 import {createAiPlanEditor} from '../src/web/ai-plan-editor.mjs';
 import {editorFieldId} from '../src/web/ai-plan-editor.mjs';
-import {buildSettingsCommand,defaultKeyAction,defaultSearchKeyAction,safeSourceUrl} from '../src/web/ai-views.mjs';
-import {createQaAi} from '../scripts/start-ai-qa.mjs';
+import {buildSettingsCommand,defaultKeyAction,defaultSearchKeyAction,firstAiField,safeSourceUrl} from '../src/web/ai-views.mjs';
+import {createQaAi,parseQaArguments} from '../scripts/start-ai-qa.mjs';
 import {setup} from './helpers/database.mjs';
+import {resolve} from 'node:path';
 
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
 const settings=()=>({revision:2,providers:{
@@ -75,6 +76,13 @@ test('polling waits two seconds, performs GET only, and stops after disposal',as
   await timers.shift().fn();assert.deepEqual(calls,['job-1','job-1']);controller.dispose();
   assert.equal(timers.length,0);
 });
+test('failed job explicit reuse carries its retained input into a new operation form',async()=>{
+  const screens=[],routes=[];const controller=createAiController({api:{aiSettings:async()=>settings()},render:s=>screens.push(s),navigate:r=>routes.push(r)});
+  const retained=input();controller.reuseJob({input:retained});retained.name='外部修改';
+  await controller.load({type:'ai-new'});
+  assert.deepEqual(routes,[{type:'ai-new'}]);assert.equal(screens.at(-1).input.name,'江南小旅行');
+  assert.equal(controller.snapshot().draft.cityCodes[1],'320500');
+});
 
 test('late AI route response never overwrites the current route',async()=>{
   const old=deferred(),screens=[];const controller=createAiController({api:{aiPlans:()=>old.promise,aiSettings:async()=>settings()},render:s=>screens.push(s),navigate:()=>{}});
@@ -118,6 +126,14 @@ test('source links allow only http(s) and force safe relationship attributes',()
   assert.equal(safeSourceUrl('data:text/html,<script>alert(1)</script>'),null);
   assert.equal(safeSourceUrl('https://example.com/a'),'https://example.com/a');
   assert.equal(safeSourceUrl('http://example.com/a'),'http://example.com/a');
+});
+test('first known AI field error is selected for focus without trusting arbitrary selectors',()=>{
+  assert.equal(firstAiField({unknown:'x',startDate:'请选择日期',name:'请输入名称'}),'startDate');
+  assert.equal(firstAiField({unknown:'x'}),null);
+});
+test('QA arguments reject the production database path even under a Unicode workspace',()=>{
+  assert.throws(()=>parseQaArguments(['--port','3211','--db',resolve('runtime/travel.sqlite')]),/禁止连接正式/);
+  assert.equal(parseQaArguments(['--port','3211','--db','runtime/qa-ai.sqlite']).port,3211);
 });
 
 test('QA AI factory completes through fixed local fakes without external transport',async t=>{

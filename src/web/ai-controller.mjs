@@ -2,11 +2,11 @@ const activeStates=new Set(['queued','searching','generating']);
 const clone=value=>value===undefined?undefined:structuredClone(value);
 const message=error=>error?.message??'操作失败，请重试';
 
-export function createAiController({api,render,navigate,confirm=()=>false,clock=globalThis,createId=()=>crypto.randomUUID()}) {
-  let disposed=false,sequence=0,timer=null,pendingCommand=null,draft=null,state={type:'idle'};
+export function createAiController({api,render,navigate,confirm=()=>false,clock=globalThis,createId=()=>crypto.randomUUID(),initialDraft=null}) {
+  let disposed=false,sequence=0,timer=null,pendingCommand=null,draft=clone(initialDraft),state={type:'idle'};
   const show=next=>{state=next;if(!disposed)render(clone(next));};
   const stopPoll=()=>{if(timer!==null){clock.clearTimeout(timer);timer=null;}};
-  const snapshot=()=>clone({...state,pendingCommand});
+  const snapshot=()=>clone({...state,pendingCommand,draft});
   async function poll(id=state.job?.id??state.route?.id) {
     if(disposed||!id)return;
     const token=sequence;
@@ -63,6 +63,7 @@ export function createAiController({api,render,navigate,confirm=()=>false,clock=
     try {const receipt=await api.convertAiPlan(plan.id,{expectedRevision:plan.revision});navigate({type:'detail',id:receipt.tripId});return receipt;}
     catch(error){show({...state,error:message(error)});return null;}
   }
+  function reuseJob(job) {draft=clone(job.input);navigate({type:'ai-new'});}
   function dispose(){disposed=true;sequence++;stopPoll();}
-  return {load,submit,retrySubmit:sendPending,poll,dispose,snapshot,changeInput,saveSettings,convert};
+  return {load,submit,retrySubmit:sendPending,poll,dispose,snapshot,changeInput,saveSettings,convert,reuseJob};
 }

@@ -1,5 +1,5 @@
 import {resolve} from 'node:path';
-import {pathToFileURL} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {startServer} from '../src/start.mjs';
 import {createAiSettingsStore} from '../src/storage/ai-settings-store.mjs';
 import {createAiJobStore} from '../src/storage/ai-job-store.mjs';
@@ -31,18 +31,18 @@ export function createQaAi({database,protector=createDpapiProtector()}={}) {
   return {settings,jobs,plans,qaEvidence};
 }
 
-function argumentsFrom(argv) {
+export function parseQaArguments(argv) {
   const result={port:3211,db:null};
   for(let i=0;i<argv.length;i+=2){if(argv[i]==='--port')result.port=Number(argv[i+1]);else if(argv[i]==='--db')result.db=argv[i+1];else throw new Error('仅支持 --port 和 --db');}
   if(!Number.isInteger(result.port)||result.port<1||result.port>65535||!result.db)throw new Error('用法：node scripts/start-ai-qa.mjs --port 3211 --db runtime/qa-ai.sqlite');
-  const path=resolve(result.db),production=resolve(new URL('../runtime/travel.sqlite',import.meta.url).pathname.replace(/^\/([A-Za-z]:)/u,'$1'));
+  const path=resolve(result.db),production=resolve(fileURLToPath(new URL('../runtime/travel.sqlite',import.meta.url)));
   if(path.toLowerCase()===production.toLowerCase())throw new Error('QA 服务禁止连接正式 runtime/travel.sqlite');
   return {port:result.port,dbPath:path};
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
   try {
-    const options=argumentsFrom(process.argv.slice(2));
+    const options=parseQaArguments(process.argv.slice(2));
     const running=await startServer({...options,aiFactory:({database})=>createQaAi({database})});
     console.log('【模拟模式】不会连接任何真实搜索或模型平台，也不会产生付费请求。');
     console.log(`AI 页面验收服务：${running.url}`);

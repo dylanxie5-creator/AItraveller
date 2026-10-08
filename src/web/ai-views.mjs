@@ -9,6 +9,8 @@ export const providers=Object.freeze({
 });
 export const defaultKeyAction=keyConfigured=>keyConfigured?'retain':'delete';
 export const defaultSearchKeyAction=search=>search.keyMode==='zhipu'?'retain':defaultKeyAction(search.keyConfigured);
+const aiFields=new Set(['name','startDate','endDate','travelerCount','budgetYuan','cityCodes','preferences','provider']);
+export function firstAiField(fields={}){return Object.keys(fields).find(key=>aiFields.has(key))??null;}
 export function safeSourceUrl(value){try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)?url.href:null;}catch{return null;}}
 export function buildSettingsCommand(current,raw) {
   const result={expectedRevision:current.revision,providers:{},search:{keyMode:raw.search.keyMode,keyAction:raw.search.keyAction}};
@@ -84,12 +86,17 @@ function renderPlanner(root,state,actions) {
   const submit=button(state.busy?'正在提交…':'确认成本并开始生成',()=>{});submit.type='submit';submit.disabled=state.busy||state.uncertain||!configured.length;
   if(state.uncertain)form.querySelectorAll('input,textarea,select').forEach(control=>{control.disabled=true;});
   form.append(submit);root.append(form);
+  for(const [key,value] of Object.entries(state.fields??{})) {
+    if(!aiFields.has(key))continue;const control=form.querySelector(`#${key}`);if(!control)continue;
+    control.setAttribute('aria-invalid','true');control.parentElement?.append(el('span',{class:'field-error',role:'alert'},value));
+  }
+  const first=firstAiField(state.fields);if(first)form.querySelector(`#${first}`)?.focus();
 }
 function renderJob(root,state,actions) {
   const job=state.job;root.append(heading('AI PLANNING JOB','规划任务'),el('section',{class:'job-card'},el('span',{class:`badge ${job.state}`},statusText(job)),el('h2',{},job.input?.name??'旅行攻略'),el('p',{},`已预留：检索 ${job.searchCalls}/3 次 · 模型 ${job.modelCalls}/1 次`),
     job.error?el('p',{class:'form-error',role:'alert'},job.error.message):[],
     job.state==='succeeded'?button('查看攻略',()=>actions.navigate({type:'ai-plan',id:job.planId})):[],
-    ['failed','interrupted'].includes(job.state)?button('基于保留输入新生成',()=>actions.navigate({type:'ai-new'}),'secondary'):[]));
+    ['failed','interrupted'].includes(job.state)?button('基于保留输入新生成',()=>actions.reuseJob(job),'secondary'):[]));
 }
 function renderPlans(root,state,actions) {
   root.append(heading('SAVED AI GUIDES','我的 AI 攻略',button('＋ 新建 AI 规划',()=>actions.navigate({type:'ai-new'}))));
