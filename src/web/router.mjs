@@ -8,6 +8,10 @@ export function parseRoute(hash) {
   ai=/^\/ai\/plans\/([a-zA-Z0-9_-]{1,80})(\/edit)?$/.exec(path);
   if(ai)return {type:ai[2]?'ai-plan-edit':'ai-plan',id:ai[1]};
   if(path==='/trips')return {type:'trips'};if(path==='/new')return {type:'new'};
+  let expense=/^\/trips\/([a-zA-Z0-9_-]{1,80})\/expenses$/.exec(path);if(expense)return {type:'expenses',id:expense[1]};
+  expense=/^\/trips\/([a-zA-Z0-9_-]{1,80})\/expenses\/new$/.exec(path);if(expense)return {type:'expense-new',id:expense[1]};
+  expense=/^\/trips\/([a-zA-Z0-9_-]{1,80})\/expenses\/([a-zA-Z0-9_-]{1,80})\/edit$/.exec(path);if(expense)return {type:'expense-edit',id:expense[1],expenseId:expense[2]};
+  expense=/^\/trips\/([a-zA-Z0-9_-]{1,80})\/expense-categories$/.exec(path);if(expense)return {type:'expense-categories',id:expense[1]};
   const match=/^\/trips\/([a-zA-Z0-9_-]{1,80})(\/edit)?$/.exec(path);
   return match?{type:match[2]?'edit':'detail',id:match[1]}:{type:'home'};
 }
@@ -20,6 +24,10 @@ export function routeToHash(route) {
   if(route.type==='ai-plans')return '#/ai/plans';
   if(route.type==='ai-job')return `#/ai/jobs/${route.id}`;
   if(route.type==='ai-plan'||route.type==='ai-plan-edit')return `#/ai/plans/${route.id}${route.type==='ai-plan-edit'?'/edit':''}`;
+  if(route.type==='expenses')return `#/trips/${route.id}/expenses`;
+  if(route.type==='expense-new')return `#/trips/${route.id}/expenses/new`;
+  if(route.type==='expense-edit')return `#/trips/${route.id}/expenses/${route.expenseId}/edit`;
+  if(route.type==='expense-categories')return `#/trips/${route.id}/expense-categories`;
   return `#/trips/${route.id}${route.type==='edit'?'/edit':''}`;
 }
 export function navigate(route) {location.hash=routeToHash(route).slice(1);}

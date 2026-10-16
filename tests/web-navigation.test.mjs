@@ -1,13 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createApp} from '../src/web/app.mjs';
-import {parseRoute} from '../src/web/router.mjs';
+import {parseRoute,routeToHash} from '../src/web/router.mjs';
 import {createApiClient} from '../src/web/api-client.mjs';
 import {presentTrip} from '../src/domain/trip-presenter.mjs';
 import {setup,prepare} from './helpers/database.mjs';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 test('navigation parses only known routes and safely decodes trip ids',()=>{
   assert.deepEqual(parseRoute('#/trips/trip-1/edit'),{type:'edit',id:'trip-1'});assert.deepEqual(parseRoute('#/new'),{type:'new'});assert.deepEqual(parseRoute('#/bad'),{type:'home'});
+});
+test('expense routes round trip only safe identities',()=>{
+  const routes=[{type:'expenses',id:'trip-1'},{type:'expense-new',id:'trip-1'},{type:'expense-edit',id:'trip-1',expenseId:'expense-1'},{type:'expense-categories',id:'trip-1'}];
+  for(const route of routes)assert.deepEqual(parseRoute(routeToHash(route)),route);
+  assert.deepEqual(parseRoute('#/trips/bad%2Fid/expenses'),{type:'home'});
 });
 test('empty overview is real zero and load errors are not empty trips',async t=>{
   const {service}=setup(t),screens=[];
