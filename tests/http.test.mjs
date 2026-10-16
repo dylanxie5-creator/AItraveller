@@ -9,7 +9,7 @@ import {request} from './helpers/http-client.mjs';
 async function app(t,options={}) {
   const state=setup(t); const server=createServer();
   await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;
-  server.on('request',createHttpApp({service:state.service,allowedHosts:[`127.0.0.1:${port}`,`localhost:${port}`],...options}));
+  server.on('request',createHttpApp({service:state.service,expenses:state.expenses,allowedHosts:[`127.0.0.1:${port}`,`localhost:${port}`],...options}));
   t.after(()=>new Promise(r=>server.close(r)));return {...state,url:`http://127.0.0.1:${port}`};
 }
 test('real HTTP exposes overview cities and transactional CRUD',async t=>{
