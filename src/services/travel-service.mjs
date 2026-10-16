@@ -2,20 +2,22 @@ import {createHash} from 'node:crypto';
 import {createTripStore} from '../storage/trip-store.mjs';
 import {createDraftStore} from '../storage/draft-store.mjs';
 import {createAiConversionStore} from '../storage/ai-conversion-store.mjs';
+import {createExpenseStore} from '../storage/expense-store.mjs';
 import {conflict,missing,validId,validRevision} from '../storage/errors.mjs';
 import {normalizeTripInput,ValidationError} from '../shared/trip-validation.mjs';
 import {getCityByCode} from '../domain/city-catalog.mjs';
 import {getTripStatus,todayDateOnly} from '../shared/date.mjs';
 function canonical(value) {if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])]));return value;}
 export function createTravelService({database,today=todayDateOnly,now=()=>new Date().toISOString(),conversionStore=createAiConversionStore(database)}) {
-  const trips=createTripStore(database),drafts=createDraftStore(database),{db}=database;
+  const trips=createTripStore(database),drafts=createDraftStore(database),expenseStore=createExpenseStore(database),{db}=database;
   const getTrip=id=>{const trip=trips.get(id);if(!trip)throw missing();return trip;};
   return {listTrips:trips.list,getTrip,getDraft:drafts.get,
     getOverview(){
       const day=today(),all=trips.list();const counts={total:all.length,upcoming:0,ongoing:0,completed:0};all.forEach(t=>counts[getTripStatus(t,day)]++);
       const order={ongoing:0,upcoming:1,completed:2};
       all.sort((a,b)=>{const sa=getTripStatus(a,day),sb=getTripStatus(b,day);return order[sa]-order[sb]||(sa==='completed'?b.endDate.localeCompare(a.endDate):a.startDate.localeCompare(b.startDate))||a.id.localeCompare(b.id);});
-      return {today:day,counts,recentTrip:all[0]??null};
+      let totalCents=0,expenseCount=0;for(const trip of all)for(const expense of expenseStore.list(trip.id)){totalCents+=expense.amountCents;expenseCount++;if(!Number.isSafeInteger(totalCents))throw new RangeError('花销总额超出安全范围');}
+      return {today:day,counts,recentTrip:all[0]??null,expenses:{hasExpenses:expenseCount>0,totalCents}};
     },saveDraft(key,command){if(key!=='new'&&typeof key==='string'&&key.startsWith('edit:'))getTrip(key.slice(5));return drafts.put(key,command);},
     discardDraft:drafts.close,
     saveTrip(id,command){

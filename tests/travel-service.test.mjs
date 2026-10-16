@@ -36,7 +36,7 @@ test('editor keys and saved target identities cannot be redirected',t=>{
 });
 test('overview uses server day and prefers nearest upcoming trip',t=>{
   const {service}=setup(t);service.saveTrip('trip-1',prepare(service));
-  assert.deepEqual(service.getOverview().counts,{total:1,upcoming:1,ongoing:0,completed:0});assert.equal(service.getOverview().recentTrip.id,'trip-1');assert.equal(service.getOverview().today,'2026-10-02');
+  assert.deepEqual(service.getOverview().counts,{total:1,upcoming:1,ongoing:0,completed:0});assert.equal(service.getOverview().recentTrip.id,'trip-1');assert.equal(service.getOverview().today,'2026-10-02');assert.deepEqual(service.getOverview().expenses,{hasExpenses:false,totalCents:0});
 });
 test('legacy city snapshots remain readable but unknown new codes are rejected',t=>{
   const {service,database}=setup(t);service.saveTrip('trip-1',prepare(service));

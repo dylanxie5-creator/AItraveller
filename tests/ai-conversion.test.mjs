@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createAiPlanService} from '../src/services/ai-plan-service.mjs';
+import {createExpenseService} from '../src/services/expense-service.mjs';
 import {normalizeAiInput} from '../src/ai/validation.mjs';
 import {getCityByCode} from '../src/domain/city-catalog.mjs';
 import {makeAiContext} from './helpers/ai-context.mjs';
@@ -54,8 +55,10 @@ test('conversion association failure rolls back the new trip and leaves the guid
 
 test('conversion deletion-mark failure rolls back trip deletion and created status',async t=>{
   const c=await makeAiContext(t),saved=generated(c),conversion=c.plans.convert(saved.id,{expectedRevision:1});
+  const expenses=createExpenseService({database:c.database,now:()=> '2026-10-05T06:00:00.000Z'}),trip=c.travel.getTrip(conversion.tripId);
+  expenses.saveExpense(conversion.tripId,'expense-1',{operationId:'expense-before-delete',expectedRevision:0,input:{amountYuan:'10',categoryId:'default:food',cityCode:null,spentDate:trip.startDate,note:''}});
   c.database.db.exec("CREATE TRIGGER reject_conversion_delete BEFORE UPDATE OF status ON ai_conversions WHEN NEW.status='deleted' BEGIN SELECT RAISE(ABORT,'injected'); END");
-  assert.throws(()=>c.travel.deleteTrip(conversion.tripId,1));assert.equal(c.travel.getTrip(conversion.tripId).revision,1);assert.equal(c.plans.forTrip(conversion.tripId).status,'created');
+  assert.throws(()=>c.travel.deleteTrip(conversion.tripId,1));assert.equal(c.travel.getTrip(conversion.tripId).revision,1);assert.equal(c.plans.forTrip(conversion.tripId).status,'created');assert.equal(expenses.getExpense(conversion.tripId,'expense-1').amountCents,1000);
 });
 
 test('server-generated trip id collision fails without overwriting an existing trip',async t=>{
