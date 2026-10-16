@@ -37,6 +37,22 @@ test('delete cancel confirm and category errors remain explicit',async()=>{
   await c.deleteCategory({tripId:'trip-1',id:'custom:tea',revision:1});assert.equal(renders.at(-1).error,'分类正在使用');
 });
 
+test('deleting an expense reloads the current overview when the route is unchanged',async()=>{
+  const expense={id:'expense-1',tripId:'trip-1',revision:2,amountCents:25000,categoryName:'餐饮',cityName:'整个行程',cityState:'trip',spentDate:'2026-10-10',note:'测试花销'};
+  const before={...overview,summary:{hasExpenses:true,totalCents:25000},expenses:[expense]};
+  const after={...overview,summary:{hasExpenses:false,totalCents:0},expenses:[]};
+  let overviewCalls=0;
+  const api={expenseOverview:async()=>++overviewCalls===1?before:after,deleteExpense:async()=>({deleted:true,id:expense.id})};
+  const c=createExpenseController({api,render:()=>{},navigate:()=>{},confirm:async()=>true,createId:()=> 'operation-1'});
+
+  await c.load({type:'expenses',id:'trip-1'});
+  await c.deleteExpense(expense);
+
+  assert.equal(overviewCalls,2);
+  assert.equal(c.snapshot().overview.summary.totalCents,0);
+  assert.deepEqual(c.snapshot().overview.expenses,[]);
+});
+
 test('expense API client encodes identities and sends commands unchanged',async()=>{
   const calls=[],api=createApiClient({fetchImpl:async(url,options)=>{calls.push({url,options});return {ok:true,status:200,json:async()=>({data:{ok:true}})};}}),command={operationId:'op',expectedRevision:1};
   await api.saveExpense('trip unsafe','expense unsafe',command);await api.deleteExpenseCategory('trip unsafe','custom:tea',command);

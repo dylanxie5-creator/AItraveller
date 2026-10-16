@@ -30,7 +30,7 @@ export function createExpenseController({api,render,navigate,confirm=()=>false,t
   async function deleteExpense(expense) {
     const note=typeof expense.note==='string'&&expense.note?` · ${[...expense.note].slice(0,24).join('')}${[...expense.note].length>24?'…':''}`:'';
     if(disposed||busy||!await confirm(`确定删除 ${expense.spentDate??''} 的这笔花销${note}吗？`))return;busy=true;emit();
-    try{await api.deleteExpense(expense.tripId??route?.id,expense.id,{operationId:createId(),expectedRevision:expense.revision});if(!disposed)navigate({type:'expenses',id:expense.tripId??route?.id});}catch(failure){fail(failure);}finally{busy=false;emit();}
+    try{const tripId=expense.tripId??route?.id;await api.deleteExpense(tripId,expense.id,{operationId:createId(),expectedRevision:expense.revision});if(!disposed)await load({type:'expenses',id:tripId});}catch(failure){fail(failure);}finally{busy=false;emit();}
   }
   async function saveCategory(command) {
     if(disposed||busy)return;busy=true;emit();
