@@ -1,3 +1,5 @@
+import {renderHomeExpenseCard,renderTripExpenseCard} from './expense-views.mjs';
+
 export function el(tag,attributes={},...children) {
   const node=document.createElement(tag);
   for(const [key,value] of Object.entries(attributes)) {if(key.startsWith('on'))node.addEventListener(key.slice(2).toLowerCase(),value);else if(key==='class')node.className=value;else if(value!==false&&value!==null&&value!==undefined)node.setAttribute(key,String(value));}
@@ -16,6 +18,7 @@ export function renderView(root,state,actions) {
   if(home){
     const counts=state.data.counts;
     root.append(el('div',{class:'stats'},...[[counts.total,'全部行程'],[counts.upcoming,'待出发'],[counts.ongoing,'进行中'],[counts.completed,'已结束']].map(([value,label])=>el('section',{class:'stat'},el('span',{class:'stat-value'},value),el('span',{class:'stat-label'},label)))));
+    root.append(renderHomeExpenseCard(state.data.expenses,actions));
     root.append(el('div',{class:'section-heading'},el('h2',{},'最近一趟旅行'),button('查看全部',()=>actions.navigate({type:'trips'}),'text')));
     root.append(state.trip?tripCard(state.trip,actions):empty(actions));
     root.append(el('section',{class:'local-note'},el('span',{class:'note-symbol'},'◇'),el('div',{},el('h3',{},'属于你的旅行手账'),el('p',{},'先把时间和路线安排好。行程保存在这台电脑上，关闭网页后仍可继续。'))));
@@ -25,6 +28,7 @@ export function renderView(root,state,actions) {
   }else{
     const t=state.trip;root.append(el('section',{class:'detail-summary'},el('span',{class:`badge ${t.status}`},t.statusLabel),el('p',{class:'detail-date'},`${t.startDate} — ${t.endDate}`),el('div',{class:'detail-facts'},el('span',{},`${t.travelerCount} 人出行`),el('span',{},`预算 ${t.budgetText}`))));
     root.append(el('section',{class:'timeline-panel'},el('h2',{},'城市路线'),el('ol',{class:'timeline'},t.cities.map((city,i)=>el('li',{},el('span',{class:'city-number'},String(i+1).padStart(2,'0')),el('div',{},el('h3',{},city.cityName),el('p',{},`${city.arrivalDate} — ${city.departureDate}`),el('span',{class:'muted'},city.provinceName)))))));
+    root.append(renderTripExpenseCard(state.expenseOverview,actions));
     if(state.guide)root.append(el('section',{class:'guide-link'},el('div',{},el('h2',{},'由 AI 攻略创建'),el('p',{},state.guide.status==='deleted'?'正式行程已删除，转换时的冻结快照仍保留。':'正式行程保存的是转换时快照；当前攻略可继续独立编辑。')),button('查看当前原攻略',()=>actions.navigate({type:'ai-plan',id:state.guide.planId}),'secondary')));
     root.append(el('p',{'data-delete-error':'',class:'form-error',hidden:true,role:'alert'}),el('div',{class:'detail-actions'},button('编辑行程',()=>actions.navigate({type:'edit',id:t.id})),button('删除行程',()=>actions.deleteTrip(t),'danger'),button('返回列表',()=>actions.navigate({type:'trips'}),'secondary')));
   }

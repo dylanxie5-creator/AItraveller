@@ -9,7 +9,7 @@ test('local startup serves all browser modules but not private project files',as
   const running=await startServer({dbPath:path,port:0});
   try {
     assert.equal(running.server.address().address,'127.0.0.1');
-    for(const route of ['/',...['styles.css','app.mjs','api-client.mjs','router.mjs','views.mjs','form-controller.mjs','favicon.svg'].map(f=>'/web/'+f),...['date.mjs','money.mjs','trip-validation.mjs','trip-form-model.mjs','trip-presenter.mjs'].map(f=>'/shared/'+f)]) {
+    for(const route of ['/',...['styles.css','app.mjs','api-client.mjs','router.mjs','views.mjs','form-controller.mjs','expense-controller.mjs','expense-views.mjs','favicon.svg'].map(f=>'/web/'+f),...['date.mjs','money.mjs','trip-validation.mjs','trip-form-model.mjs','expense-form-model.mjs','trip-presenter.mjs'].map(f=>'/shared/'+f)]) {
       const response=await request(running.url,{path:route});assert.equal(response.status,200,route);assert.ok(response.text.length>0,route);
     }
     for(const route of ['/runtime/travel.sqlite','/src/start.mjs','/storage/database.mjs','/.env','/package.json'])assert.equal((await request(running.url,{path:route})).status,404,route);

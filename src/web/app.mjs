@@ -6,6 +6,8 @@ import {createFormController} from './form-controller.mjs';
 import {createAiController} from './ai-controller.mjs';
 import {renderAiView} from './ai-views.mjs';
 import {createAiPlanEditor,renderAiEditor} from './ai-plan-editor.mjs';
+import {createExpenseController} from './expense-controller.mjs';
+import {renderExpenseView} from './expense-views.mjs';
 import {presentTrip,orderTrips} from '../shared/trip-presenter.mjs';
 export function createApp({api,render,navigate,confirm=()=>false,openEditor}) {
   let sequence=0,deleting=false;
@@ -15,7 +17,7 @@ export function createApp({api,render,navigate,confirm=()=>false,openEditor}) {
       let state;
       if(route.type==='home'){const data=await api.overview();state={type:'home',data,trip:data.recentTrip?presentTrip(data.recentTrip,data.today):null};}
       else if(route.type==='trips'){const [trips,overview]=await Promise.all([api.trips(),api.overview()]);state={type:'trips',trips:orderTrips(trips,overview.today)};}
-      else if(route.type==='detail'){const [trip,overview,guide]=await Promise.all([api.trip(route.id),api.overview(),api.tripGuide?.(route.id).catch(error=>{if(error.code==='NOT_FOUND')return null;throw error;})??null]);state={type:'detail',trip:presentTrip(trip,overview.today),guide};}
+      else if(route.type==='detail'){const [trip,overview,guide,expenseOverview]=await Promise.all([api.trip(route.id),api.overview(),api.tripGuide?.(route.id).catch(error=>{if(error.code==='NOT_FOUND')return null;throw error;})??null,api.expenseOverview(route.id)]);state={type:'detail',trip:presentTrip(trip,overview.today),guide,expenseOverview};}
       else state={type:'editor',route};
       if(token!==sequence)return;render(state);if(state.type==='editor')await openEditor?.(route);
     }catch(error){if(token===sequence)render({type:'error',route,message:error.message??'加载失败，请重试',code:error.code});}
@@ -27,7 +29,7 @@ export function createApp({api,render,navigate,confirm=()=>false,openEditor}) {
 }
 if(typeof document!=='undefined') {
   const root=document.querySelector('#content');const api=createApiClient();
-  let editor=null,aiEditor=null,activeHash=location.hash,suppressHash=null,navigationQueue=Promise.resolve();
+  let editor=null,aiEditor=null,expenseController=null,activeHash=location.hash,suppressHash=null,navigationQueue=Promise.resolve();
   const app=createApp({api,render:state=>renderView(root,state,{navigate,deleteTrip:t=>app.deleteTrip(t),retry:r=>app.load(r)}),navigate,confirm:message=>window.confirm(message),openEditor:async route=>{
     const key=route.type==='new'?'new':`edit:${route.id}`;
     let [slot,trip]=await Promise.all([api.draft(key),route.type==='edit'?api.trip(route.id):null]);
@@ -42,8 +44,9 @@ if(typeof document!=='undefined') {
   let ai;
   const createAi=initialDraft=>createAiController({api,render:state=>renderAiView(root,state,{navigate,retry:r=>ai.load(r),submit:values=>ai.submit(values),retrySubmit:()=>ai.retrySubmit(),saveSettings:command=>ai.saveSettings(command),convert:plan=>ai.convert(plan),reuseJob:job=>ai.reuseJob(job)}),navigate,confirm:message=>window.confirm(message),initialDraft});
   ai=createAi();
+  const createExpenses=()=>createExpenseController({api,render:state=>renderExpenseView(root,state,{controller:expenseController,navigate,deleteExpense:item=>expenseController.deleteExpense(item),saveCategory:command=>expenseController.saveCategory(command),deleteCategory:category=>expenseController.deleteCategory(category),retry:route=>expenseController.load(route)}),navigate,confirm:message=>window.confirm(message)});
   async function loadRoute(route) {
-    document.querySelectorAll('[data-nav]').forEach(node=>node.classList.toggle('active',node.dataset.nav===(route.type==='home'?'home':route.type==='trips'||['detail','edit','new'].includes(route.type)?'trips':route.type==='ai-settings'?'ai-settings':'ai')));
+    document.querySelectorAll('[data-nav]').forEach(node=>node.classList.toggle('active',node.dataset.nav===(route.type==='home'?'home':route.type==='trips'||['detail','edit','new','expenses','expense-new','expense-edit','expense-categories'].includes(route.type)?'trips':route.type==='ai-settings'?'ai-settings':'ai')));
     if(route.type==='ai-plan-edit') {
       renderAiView(root,{type:'ai-loading',route},{});
       try {
@@ -53,6 +56,7 @@ if(typeof document!=='undefined') {
         renderAiEditor(root,aiEditor.snapshot(),aiEditor);
       }catch(error){renderAiView(root,{type:'ai-error',route,message:error.message??'加载失败，请重试'},{navigate,retry:loadRoute});}
     } else if(route.type.startsWith('ai-'))await ai.load(route);
+    else if(['expenses','expense-new','expense-edit','expense-categories'].includes(route.type)){expenseController=createExpenses();await expenseController.load(route);}
     else await app.load(route);
   }
   window.addEventListener('hashchange',()=>{
@@ -61,9 +65,10 @@ if(typeof document!=='undefined') {
       const targetHash=location.hash;
       if(editor){if(!await editor.leave()){suppressHash=activeHash;location.hash=activeHash;return;}editor.dispose();editor=null;}
       if(aiEditor){if(!await aiEditor.leave()){suppressHash=activeHash;location.hash=activeHash;return;}aiEditor.dispose();aiEditor=null;}
+      if(expenseController){expenseController.dispose();expenseController=null;}
       const retainedAiDraft=ai.snapshot().draft;ai.dispose();ai=createAi(retainedAiDraft);activeHash=targetHash;await loadRoute(parseRoute(targetHash));
     }).catch(()=>{});
   });
-  window.addEventListener('beforeunload',event=>{if((editor&&(editor.snapshot().dirty||editor.snapshot().busy||editor.snapshot().hasPendingSave))||(aiEditor&&aiEditor.snapshot().dirty)){event.preventDefault();event.returnValue='';}});
+  window.addEventListener('beforeunload',event=>{const expenseState=expenseController?.snapshot();if((editor&&(editor.snapshot().dirty||editor.snapshot().busy||editor.snapshot().hasPendingSave))||(aiEditor&&aiEditor.snapshot().dirty)||(expenseState&&(expenseState.busy||expenseState.pendingCommand))){event.preventDefault();event.returnValue='';}});
   loadRoute(parseRoute(location.hash));
 }

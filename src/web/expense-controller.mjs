@@ -28,16 +28,17 @@ export function createExpenseController({api,render,navigate,confirm=()=>false,t
     }catch(failure){fail(failure);}finally{busy=false;emit();}
   }
   async function deleteExpense(expense) {
-    if(disposed||busy||!await confirm('确定删除这笔花销吗？'))return;busy=true;emit();
+    const note=typeof expense.note==='string'&&expense.note?` · ${[...expense.note].slice(0,24).join('')}${[...expense.note].length>24?'…':''}`:'';
+    if(disposed||busy||!await confirm(`确定删除 ${expense.spentDate??''} 的这笔花销${note}吗？`))return;busy=true;emit();
     try{await api.deleteExpense(expense.tripId??route?.id,expense.id,{operationId:createId(),expectedRevision:expense.revision});if(!disposed)navigate({type:'expenses',id:expense.tripId??route?.id});}catch(failure){fail(failure);}finally{busy=false;emit();}
   }
   async function saveCategory(command) {
     if(disposed||busy)return;busy=true;emit();
-    try{await api.saveExpenseCategory(command.tripId,command.id,{operationId:createId(),expectedRevision:command.expectedRevision,name:command.name});error='';}catch(failure){fail(failure);}finally{busy=false;emit();}
+    try{const id=command.id??`custom:${createId()}`;await api.saveExpenseCategory(command.tripId,id,{operationId:createId(),expectedRevision:command.expectedRevision,name:command.name});error='';await load({type:'expense-categories',id:command.tripId});}catch(failure){fail(failure);}finally{busy=false;emit();}
   }
   async function deleteCategory(category) {
     if(disposed||busy||!await confirm('确定删除这个分类吗？'))return;busy=true;emit();
-    try{await api.deleteExpenseCategory(category.tripId??route?.id,category.id,{operationId:createId(),expectedRevision:category.revision});error='';}catch(failure){fail(failure);}finally{busy=false;emit();}
+    try{const tripId=category.tripId??route?.id;await api.deleteExpenseCategory(tripId,category.id,{operationId:createId(),expectedRevision:category.revision});error='';await load({type:'expense-categories',id:tripId});}catch(failure){fail(failure);}finally{busy=false;emit();}
   }
   return {load,setField,save,retrySave:save,deleteExpense,saveCategory,deleteCategory,dispose(){disposed=true;sequence++;},snapshot};
 }

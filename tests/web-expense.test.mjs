@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createExpenseController} from '../src/web/expense-controller.mjs';
 import {createApiClient} from '../src/web/api-client.mjs';
+import {renderExpenseView} from '../src/web/expense-views.mjs';
 
 const trip={id:'trip-1',startDate:'2026-10-10',endDate:'2026-10-13',cities:[{cityCode:'320100',cityName:'南京市'}]};
 const categories=[{id:'default:food',name:'餐饮',kind:'default'}];
@@ -41,4 +42,15 @@ test('expense API client encodes identities and sends commands unchanged',async(
   await api.saveExpense('trip unsafe','expense unsafe',command);await api.deleteExpenseCategory('trip unsafe','custom:tea',command);
   assert.equal(calls[0].url,'/api/trips/trip%20unsafe/expenses/expense%20unsafe');assert.deepEqual(JSON.parse(calls[0].options.body),command);
   assert.equal(calls[1].url,'/api/trips/trip%20unsafe/expense-categories/custom%3Atea');
+});
+
+test('expense overview renders four responsive sections and hostile notes as text',()=>{
+  class FakeNode {constructor(tag='',text=''){this.tag=tag;this.text=text;this.children=[];this.attrs={};this.className='';}setAttribute(k,v){this.attrs[k]=String(v);}addEventListener(){}append(...items){this.children.push(...items);}replaceChildren(...items){this.children=[...items];}}
+  const priorNode=globalThis.Node,priorDocument=globalThis.document;globalThis.Node=FakeNode;globalThis.document={createElement:tag=>new FakeNode(tag),createTextNode:text=>new FakeNode('#text',String(text))};
+  try {
+    const root=new FakeNode('main'),note='<img src=x onerror=alert(1)>';
+    renderExpenseView(root,{type:'expenses',overview:{trip:{...trip,name:'测试行程'},categories,summary:{hasExpenses:true,totalCents:12000,budgetCents:10000,budgetRemainingCents:-2000,budgetState:'over',byCategory:[{categoryId:'default:food',name:'餐饮',totalCents:12000,count:1}],byCity:[{cityCode:null,cityName:'整个行程',cityState:'trip',totalCents:12000,count:1}],recentExpenses:[]},expenses:[{id:'expense-1',revision:1,amountCents:12000,categoryName:'餐饮',cityName:'整个行程',cityState:'trip',spentDate:'2026-10-10',note}] }},{navigate:()=>{},deleteExpense:()=>{}});
+    const nodes=[];(function visit(node){nodes.push(node);for(const child of node.children??[])visit(child);})(root);
+    assert.equal(nodes.filter(node=>node.attrs?.['data-expense-section']).length,4);assert.ok(nodes.some(node=>node.tag==='#text'&&node.text===note));assert.equal(nodes.some(node=>node.tag==='img'),false);assert.ok(nodes.some(node=>node.className.includes('expense-layout')));assert.ok(nodes.some(node=>node.tag==='#text'&&node.text.includes('已超预算')));
+  } finally {globalThis.Node=priorNode;globalThis.document=priorDocument;}
 });
