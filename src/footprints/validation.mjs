@@ -1,6 +1,7 @@
 import {isDateOnly} from '../shared/date.mjs';
 import {ValidationError} from '../shared/trip-validation.mjs';
 import {validId} from '../storage/errors.mjs';
+export {formatVisitDate} from '../shared/footprint-format.mjs';
 
 export const DATE_PRECISIONS=Object.freeze(['trip_range','year','month','day']);
 export const VISIT_SOURCES=Object.freeze(['trip','manual','detached']);
@@ -68,19 +69,6 @@ export function validateStoredVisit(value) {
   if(value.source==='trip'&&value.tripNameSnapshot===null)return bad();
   if(!isIso(value.createdAt)||!isIso(value.updatedAt))return bad();
   return structuredClone(value);
-}
-
-function formatDay(value,includeYear=true) {
-  const [year,month,day]=value.split('-').map(Number);
-  return `${includeYear?`${year}年`:''}${month}月${day}日`;
-}
-
-export function formatVisitDate(visit) {
-  if(visit.datePrecision==='year')return `${Number(visit.dateStart)}年`;
-  if(visit.datePrecision==='month') {const [year,month]=visit.dateStart.split('-').map(Number);return `${year}年${month}月`;}
-  if(visit.datePrecision==='day')return formatDay(visit.dateStart);
-  if(visit.datePrecision==='trip_range')return `${formatDay(visit.dateStart)}—${formatDay(visit.dateEnd,visit.dateEnd.slice(0,4)!==visit.dateStart.slice(0,4))}`;
-  throw new TypeError('足迹日期无效');
 }
 
 export function compareVisits(left,right) {

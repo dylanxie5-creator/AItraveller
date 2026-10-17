@@ -6,6 +6,7 @@ export function el(tag,attributes={},...children) {
   for(const child of children.flat(Infinity)){if(child!==undefined&&child!==null)node.append(child instanceof Node?child:document.createTextNode(String(child)));}return node;
 }
 export const button=(text,action,kind='primary')=>el('button',{type:'button',class:`button ${kind}`,onClick:action},text);
+export function homeFootprintSummary(data) {const value=data?.footprints??{};const provinceCount=Number.isSafeInteger(value.provinceCount)?value.provinceCount:0,cityCount=Number.isSafeInteger(value.cityCount)?value.cityCount:0,visitCount=Number.isSafeInteger(value.visitCount)?value.visitCount:0;return {provinceCount,cityCount,visitCount,empty:visitCount===0,route:{type:'footprints'}};}
 export function tripCard(trip,actions) {return el('button',{class:'trip-card',type:'button',onClick:()=>actions.navigate({type:'detail',id:trip.id})},el('span',{class:`badge ${trip.status}`},trip.statusLabel),el('h3',{},trip.name),el('p',{class:'route-text'},trip.routeText),el('div',{class:'trip-meta'},el('span',{},`${trip.startDate} — ${trip.endDate}`),el('span',{},`${trip.travelerCount} 人 · ${trip.budgetText}`)));}
 export function renderView(root,state,actions) {
   if(state.type==='delete-error'){const box=root.querySelector('[data-delete-error]');if(box){box.textContent=state.message;box.hidden=false;}return;}
@@ -19,6 +20,8 @@ export function renderView(root,state,actions) {
     const counts=state.data.counts;
     root.append(el('div',{class:'stats'},...[[counts.total,'全部行程'],[counts.upcoming,'待出发'],[counts.ongoing,'进行中'],[counts.completed,'已结束']].map(([value,label])=>el('section',{class:'stat'},el('span',{class:'stat-value'},value),el('span',{class:'stat-label'},label)))));
     root.append(renderHomeExpenseCard(state.data.expenses,actions));
+    const footprints=homeFootprintSummary(state.data);
+    root.append(el('section',{class:'home-footprint-card'},el('div',{},el('p',{class:'eyebrow'},'CHINA FOOTPRINTS'),el('h2',{},footprints.empty?'还没有点亮城市':'你的中国足迹'),el('p',{},footprints.empty?'完成行程或手动补录后，这里会点亮你的旅行地图。':`${footprints.provinceCount} 个省级地区 · ${footprints.cityCount} 座城市 · ${footprints.visitCount} 次到访`)),button(footprints.empty?'去记录第一处足迹':'查看足迹地图',()=>actions.navigate(footprints.route),'secondary')));
     root.append(el('div',{class:'section-heading'},el('h2',{},'最近一趟旅行'),button('查看全部',()=>actions.navigate({type:'trips'}),'text')));
     root.append(state.trip?tripCard(state.trip,actions):empty(actions));
     root.append(el('section',{class:'local-note'},el('span',{class:'note-symbol'},'◇'),el('div',{},el('h3',{},'属于你的旅行手账'),el('p',{},'先把时间和路线安排好。行程保存在这台电脑上，关闭网页后仍可继续。'))));

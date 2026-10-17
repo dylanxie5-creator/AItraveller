@@ -8,7 +8,35 @@ import {renderAiView} from './ai-views.mjs';
 import {createAiPlanEditor,renderAiEditor} from './ai-plan-editor.mjs';
 import {createExpenseController} from './expense-controller.mjs';
 import {renderExpenseView} from './expense-views.mjs';
+import {createFootprintController} from './footprint-controller.mjs';
+import {renderFootprintView} from './footprint-views.mjs';
+import {createAmapAdapter} from './amap-adapter.mjs';
 import {presentTrip,orderTrips} from '../shared/trip-presenter.mjs';
+const footprintRoutes=new Set(['footprints','footprint-province','footprint-city','footprint-new','footprint-edit','footprint-manage','footprint-settings']);
+
+export function navigationSection(route) {
+  if(route.type==='home')return 'home';
+  if(route.type==='trips'||['detail','edit','new','expenses','expense-new','expense-edit','expense-categories'].includes(route.type))return 'trips';
+  if(route.type==='footprint-settings')return 'footprint-settings';
+  if(footprintRoutes.has(route.type))return 'footprints';
+  return route.type==='ai-settings'?'ai-settings':'ai';
+}
+export function hasPendingWrites(states) {return states.filter(Boolean).some(state=>Boolean(state.dirty||state.hasPendingSave||state.pendingCommand));}
+export function createFootprintRuntime({api,root,navigate,confirm,render=renderFootprintView,controllerFactory=createFootprintController,adapterFactory=()=>createAmapAdapter({window:globalThis.window,document:globalThis.document})}) {
+  let controller=null;
+  function dispose() {controller?.dispose();controller=null;}
+  return {
+    async load(route) {
+      dispose();
+      const mapAdapter=route.type==='footprints'?adapterFactory():null;
+      let next;
+      next=controllerFactory({api,navigate,confirm,mapAdapter,render:state=>render(root,state,{navigate,controller:next,retry:value=>next.load(value),deleteVisit:visit=>next.deleteVisit(visit),suppress:visit=>next.suppress(visit),restore:item=>next.restore(item)})});
+      controller=next;await next.load(route);
+    },
+    dispose,
+    snapshot:()=>controller?.snapshot()??null,
+  };
+}
 export function createApp({api,render,navigate,confirm=()=>false,openEditor}) {
   let sequence=0,deleting=false;
   return {async load(route){
@@ -45,8 +73,9 @@ if(typeof document!=='undefined') {
   const createAi=initialDraft=>createAiController({api,render:state=>renderAiView(root,state,{navigate,retry:r=>ai.load(r),submit:values=>ai.submit(values),retrySubmit:()=>ai.retrySubmit(),saveSettings:command=>ai.saveSettings(command),convert:plan=>ai.convert(plan),reuseJob:job=>ai.reuseJob(job)}),navigate,confirm:message=>window.confirm(message),initialDraft});
   ai=createAi();
   const createExpenses=()=>createExpenseController({api,render:state=>renderExpenseView(root,state,{controller:expenseController,navigate,deleteExpense:item=>expenseController.deleteExpense(item),saveCategory:command=>expenseController.saveCategory(command),deleteCategory:category=>expenseController.deleteCategory(category),retry:route=>expenseController.load(route)}),navigate,confirm:message=>window.confirm(message)});
+  const footprints=createFootprintRuntime({api,root,navigate,confirm:message=>window.confirm(message)});
   async function loadRoute(route) {
-    document.querySelectorAll('[data-nav]').forEach(node=>node.classList.toggle('active',node.dataset.nav===(route.type==='home'?'home':route.type==='trips'||['detail','edit','new','expenses','expense-new','expense-edit','expense-categories'].includes(route.type)?'trips':route.type==='ai-settings'?'ai-settings':'ai')));
+    document.querySelectorAll('[data-nav]').forEach(node=>node.classList.toggle('active',node.dataset.nav===navigationSection(route)));
     if(route.type==='ai-plan-edit') {
       renderAiView(root,{type:'ai-loading',route},{});
       try {
@@ -56,6 +85,7 @@ if(typeof document!=='undefined') {
         renderAiEditor(root,aiEditor.snapshot(),aiEditor);
       }catch(error){renderAiView(root,{type:'ai-error',route,message:error.message??'加载失败，请重试'},{navigate,retry:loadRoute});}
     } else if(route.type.startsWith('ai-'))await ai.load(route);
+    else if(footprintRoutes.has(route.type))await footprints.load(route);
     else if(['expenses','expense-new','expense-edit','expense-categories'].includes(route.type)){expenseController=createExpenses();await expenseController.load(route);}
     else await app.load(route);
   }
@@ -66,9 +96,10 @@ if(typeof document!=='undefined') {
       if(editor){if(!await editor.leave()){suppressHash=activeHash;location.hash=activeHash;return;}editor.dispose();editor=null;}
       if(aiEditor){if(!await aiEditor.leave()){suppressHash=activeHash;location.hash=activeHash;return;}aiEditor.dispose();aiEditor=null;}
       if(expenseController){expenseController.dispose();expenseController=null;}
+      footprints.dispose();
       const retainedAiDraft=ai.snapshot().draft;ai.dispose();ai=createAi(retainedAiDraft);activeHash=targetHash;await loadRoute(parseRoute(targetHash));
     }).catch(()=>{});
   });
-  window.addEventListener('beforeunload',event=>{const expenseState=expenseController?.snapshot();if((editor&&(editor.snapshot().dirty||editor.snapshot().busy||editor.snapshot().hasPendingSave))||(aiEditor&&aiEditor.snapshot().dirty)||(expenseState&&(expenseState.busy||expenseState.pendingCommand))){event.preventDefault();event.returnValue='';}});
+  window.addEventListener('beforeunload',event=>{if(hasPendingWrites([editor?.snapshot(),aiEditor?.snapshot(),expenseController?.snapshot(),footprints.snapshot()])){event.preventDefault();event.returnValue='';}});
   loadRoute(parseRoute(location.hash));
 }

@@ -1,8 +1,8 @@
 import {readFile,realpath} from 'node:fs/promises';
 import {resolve,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
-const webFiles=new Set(['index.html','styles.css','app.mjs','api-client.mjs','router.mjs','views.mjs','form-controller.mjs','expense-controller.mjs','expense-views.mjs','ai-controller.mjs','ai-views.mjs','ai-plan-editor.mjs','favicon.svg']);
-const sharedFiles=new Set(['date.mjs','money.mjs','trip-validation.mjs','trip-form-model.mjs','expense-form-model.mjs','trip-presenter.mjs']);
+const webFiles=new Set(['index.html','styles.css','footprint-styles.css','app.mjs','api-client.mjs','router.mjs','views.mjs','form-controller.mjs','expense-controller.mjs','expense-views.mjs','footprint-controller.mjs','footprint-views.mjs','amap-adapter.mjs','ai-controller.mjs','ai-views.mjs','ai-plan-editor.mjs','favicon.svg']);
+const sharedFiles=new Set(['date.mjs','money.mjs','trip-validation.mjs','trip-form-model.mjs','expense-form-model.mjs','footprint-form-model.mjs','footprint-format.mjs','trip-presenter.mjs']);
 export const defaultWebRoot=fileURLToPath(new URL('../web/',import.meta.url));
 export const defaultSharedRoot=fileURLToPath(new URL('../shared/',import.meta.url));
 export async function staticFile(path,{webRoot=defaultWebRoot,sharedRoot=defaultSharedRoot}={}) {

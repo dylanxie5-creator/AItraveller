@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createApp} from '../src/web/app.mjs';
+import {createApp,createFootprintRuntime,hasPendingWrites,navigationSection} from '../src/web/app.mjs';
 import {parseRoute,routeToHash} from '../src/web/router.mjs';
 import {createApiClient} from '../src/web/api-client.mjs';
+import {homeFootprintSummary} from '../src/web/views.mjs';
 import {presentTrip} from '../src/domain/trip-presenter.mjs';
 import {setup,prepare} from './helpers/database.mjs';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
@@ -18,6 +19,31 @@ test('footprint routes round trip only safe identities',()=>{
   const routes=[{type:'footprints'},{type:'footprint-province',provinceCode:'320000'},{type:'footprint-city',cityCode:'320100'},{type:'footprint-new'},{type:'footprint-edit',visitId:'visit-1'},{type:'footprint-manage'},{type:'footprint-settings'}];
   for(const route of routes)assert.deepEqual(parseRoute(routeToHash(route)),route);
   for(const hash of ['#/footprints/cities/32%2F0100','#/footprints/visits/bad%2Fid/edit','#/footprints/provinces/123'])assert.deepEqual(parseRoute(hash),{type:'home'});
+});
+test('footprint navigation uses its own active destinations',()=>{
+  assert.equal(navigationSection({type:'footprints'}),'footprints');
+  assert.equal(navigationSection({type:'footprint-city',cityCode:'320100'}),'footprints');
+  assert.equal(navigationSection({type:'footprint-settings'}),'footprint-settings');
+  assert.equal(navigationSection({type:'expenses',id:'trip-1'}),'trips');
+});
+test('home footprint summary exposes real counts, empty state and destination',()=>{
+  assert.deepEqual(homeFootprintSummary({footprints:{provinceCount:3,cityCount:7,visitCount:12}}),{provinceCount:3,cityCount:7,visitCount:12,empty:false,route:{type:'footprints'}});
+  assert.deepEqual(homeFootprintSummary({}),{provinceCount:0,cityCount:0,visitCount:0,empty:true,route:{type:'footprints'}});
+});
+test('footprint runtime replaces and disposes one controller per route',async()=>{
+  const events=[];
+  const runtime=createFootprintRuntime({api:{},root:{},navigate:()=>{},confirm:()=>false,render:()=>{},adapterFactory:()=>({destroy(){events.push('adapter-destroy');}}),controllerFactory:options=>({async load(route){events.push(['load',route.type,Boolean(options.mapAdapter)]);},dispose(){events.push('controller-dispose');},snapshot(){return {pendingCommand:null};}})});
+  await runtime.load({type:'footprints'});
+  await runtime.load({type:'footprint-city',cityCode:'320100'});
+  runtime.dispose();
+  assert.deepEqual(events,[['load','footprints',true],'controller-dispose',['load','footprint-city',false],'controller-dispose']);
+});
+test('before unload warning is limited to unsaved or pending writes',()=>{
+  assert.equal(hasPendingWrites([{busy:true}]),false);
+  assert.equal(hasPendingWrites([{dirty:true}]),true);
+  assert.equal(hasPendingWrites([{hasPendingSave:true}]),true);
+  assert.equal(hasPendingWrites([{pendingCommand:{operationId:'save-1'}}]),true);
+  assert.equal(hasPendingWrites([null,{}]),false);
 });
 test('empty overview is real zero and load errors are not empty trips',async t=>{
   const {service}=setup(t),screens=[];
