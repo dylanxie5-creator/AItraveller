@@ -8,9 +8,11 @@ import {normalizeTripInput,ValidationError} from '../shared/trip-validation.mjs'
 import {getCityByCode} from '../domain/city-catalog.mjs';
 import {getTripStatus,todayDateOnly} from '../shared/date.mjs';
 import {createFootprintLifecycle} from './footprint-lifecycle.mjs';
+import {createFootprintStore} from '../storage/footprint-store.mjs';
+import {summarizeFootprints} from '../footprints/presentation.mjs';
 function canonical(value) {if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])]));return value;}
 export function createTravelService({database,today=todayDateOnly,now=()=>new Date().toISOString(),conversionStore=createAiConversionStore(database),footprintLifecycle=createFootprintLifecycle({database,today,now})}) {
-  const trips=createTripStore(database),drafts=createDraftStore(database),expenseStore=createExpenseStore(database),{db}=database;
+  const trips=createTripStore(database),drafts=createDraftStore(database),expenseStore=createExpenseStore(database),footprintStore=createFootprintStore(database),{db}=database;
   const getTrip=id=>{const trip=trips.get(id);if(!trip)throw missing();return trip;};
   return {listTrips:trips.list,getTrip,getDraft:drafts.get,
     getOverview(){
@@ -18,7 +20,7 @@ export function createTravelService({database,today=todayDateOnly,now=()=>new Da
       const order={ongoing:0,upcoming:1,completed:2};
       all.sort((a,b)=>{const sa=getTripStatus(a,day),sb=getTripStatus(b,day);return order[sa]-order[sb]||(sa==='completed'?b.endDate.localeCompare(a.endDate):a.startDate.localeCompare(b.startDate))||a.id.localeCompare(b.id);});
       let totalCents=0,expenseCount=0;for(const trip of all)for(const expense of expenseStore.list(trip.id)){totalCents+=expense.amountCents;expenseCount++;if(!Number.isSafeInteger(totalCents))throw new RangeError('花销总额超出安全范围');}
-      return {today:day,counts,recentTrip:all[0]??null,expenses:{hasExpenses:expenseCount>0,totalCents}};
+      return {today:day,counts,recentTrip:all[0]??null,expenses:{hasExpenses:expenseCount>0,totalCents},footprints:summarizeFootprints(footprintStore.list())};
     },saveDraft(key,command){if(key!=='new'&&typeof key==='string'&&key.startsWith('edit:'))getTrip(key.slice(5));return drafts.put(key,command);},
     discardDraft:drafts.close,
     saveTrip(id,command){
