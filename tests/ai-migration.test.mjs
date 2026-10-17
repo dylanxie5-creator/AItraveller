@@ -43,16 +43,16 @@ test('native verified backup remains v1 and migration preserves all existing rec
   const files=readdirSync(join(dir,'backups'));assert.equal(files.length,1);assert.match(files[0],/^pre-migration-v1-.*\.sqlite$/);
   const saved=new DatabaseSync(join(dir,'backups',files[0]),{readOnly:true});
   try {assert.deepEqual(snapshot(saved),original);assert.equal(saved.prepare('PRAGMA quick_check').get().quick_check,'ok');}finally{saved.close();}
-  assert.equal(database.db.prepare('SELECT version FROM metadata').get().version,3);
+  assert.equal(database.db.prepare('SELECT version FROM metadata').get().version,4);
   assert.deepEqual(snapshot(database.db).slice(1),original.slice(1));
   const service=createTravelService({database});assert.equal(service.getTrip('trip-1').cities[1].cityName,'苏州市');
   assert.equal(service.getDraft('edit:trip-1').input.name,'未提交的新名称');assert.equal(service.getDraft('new').state,'closed');
   assert.equal(service.saveTrip('trip-1',command).revision,1);assert.equal(service.listTrips().length,1);
   database.close();const reopened=openDatabase(path);reopened.close();
 });
-test('fresh v3 tables enforce one active job, unique operation and conversion identities',t=>{
+test('fresh v4 tables enforce one active job, unique operation and conversion identities',t=>{
   const {path,keep}=fixture(t);rmSync(path);const database=keep(openDatabase(path));const db=database.db;
-  assert.equal(db.prepare('SELECT version FROM metadata').get().version,3);
+  assert.equal(db.prepare('SELECT version FROM metadata').get().version,4);
   db.exec(`INSERT INTO ai_settings VALUES(1,0,'{}'); INSERT INTO ai_plans VALUES('plan-1',1,'{}');
     INSERT INTO ai_jobs VALUES('job-1','op-1','hash','queued','{}')`);
   assert.throws(()=>db.exec("INSERT INTO ai_settings VALUES(2,0,'{}')"));
@@ -70,7 +70,7 @@ for(const mode of ['throws','invalid','wrong-version','changed-source']) test(`b
     if(mode==='invalid'){writeFileSync(target,'bad backup');return;}
     await backup(db,target);
     const other=new DatabaseSync(mode==='changed-source'?path:target);
-    other.exec(mode==='changed-source'?"UPDATE trips SET revision=8":"UPDATE metadata SET version=4");other.close();
+    other.exec(mode==='changed-source'?"UPDATE trips SET revision=8":"UPDATE metadata SET version=5");other.close();
   };
   await assert.rejects(prepareDatabase(path,{backupImpl}),e=>e.code==='STORAGE_BACKUP_FAILED');
   if(mode==='changed-source') {const db=new DatabaseSync(path);assert.equal(db.prepare('SELECT version FROM metadata').get().version,1);assert.equal(db.prepare('SELECT revision FROM trips').get().revision,8);db.close();}
@@ -81,15 +81,15 @@ test('partial DDL failure rolls back schema and preserves original bytes',async 
   await assert.rejects(prepareDatabase(path,{applyExpenseMigration(){throw new Error('injected DDL failure');}}),e=>e.code==='STORAGE_MIGRATION_FAILED');
   assert.deepEqual(bytes(path),before);
 });
-for(const mode of ['version-4','unversioned','view-only','corrupt','missing-column'])test(`${mode} database is rejected untouched without a backup`,async t=>{
-  const {path,dir}=fixture(t,{version:mode==='version-4'?4:1});
+for(const mode of ['version-5','unversioned','view-only','corrupt','missing-column'])test(`${mode} database is rejected untouched without a backup`,async t=>{
+  const {path,dir}=fixture(t,{version:mode==='version-5'?5:1});
   if(mode==='corrupt')writeFileSync(path,'not sqlite');
-  else if(mode!=='version-4') {const db=new DatabaseSync(path);
+  else if(mode!=='version-5') {const db=new DatabaseSync(path);
     if(mode==='unversioned')db.exec('DROP TABLE metadata');
     if(mode==='missing-column')db.exec('ALTER TABLE trips DROP COLUMN revision');
     if(mode==='view-only')db.exec('DROP TABLE trip_cities; DROP TABLE trips; DROP TABLE drafts; DROP TABLE save_receipts; DROP TABLE metadata; CREATE VIEW evidence AS SELECT 1');
     db.close();}
-  const before=bytes(path);await assert.rejects(prepareDatabase(path),e=>e.code===(mode==='version-4'?'STORAGE_VERSION':'STORAGE_CORRUPT'));
+  const before=bytes(path);await assert.rejects(prepareDatabase(path),e=>e.code===(mode==='version-5'?'STORAGE_VERSION':'STORAGE_CORRUPT'));
   assert.deepEqual(bytes(path),before);assert.ok(!readdirSync(dir).includes('backups'));
 });
 test('v2 missing or weakened active-job index is rejected untouched',t=>{

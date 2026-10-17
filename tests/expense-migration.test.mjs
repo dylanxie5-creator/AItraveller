@@ -42,18 +42,18 @@ const v2Tables=['metadata','trips','trip_cities','drafts','save_receipts','ai_se
 function rows(db,names=v2Tables) {return Object.fromEntries(names.map(name=>[name,db.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all()]));}
 function backupFiles(dir) {return readdirSync(join(dir,'backups')).filter(name=>name.endsWith('.sqlite'));}
 
-test('fresh database is v3 with exact expense tables and indexes',t=>{
+test('fresh database is v4 with exact expense tables and indexes',t=>{
   const fixture=temporary(t),database=fixture.keep(openDatabase(fixture.path)),db=database.db;
-  assert.equal(db.prepare('SELECT version FROM metadata').get().version,3);
+  assert.equal(db.prepare('SELECT version FROM metadata').get().version,4);
   const objects=new Map(db.prepare("SELECT name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'").all().map(row=>[row.name,row.sql]));
   for(const name of Object.keys(expenseTables))assert.ok(objects.has(name),name);
   for(const name of Object.keys(expenseIndexes))assert.ok(objects.has(name),name);
 });
 
-test('v2 migrates to v3 after a verified snapshot without changing AI or trip data',async t=>{
+test('v2 migrates to v4 after a verified snapshot without changing AI or trip data',async t=>{
   const fixture=seedVersion2(t),source=new DatabaseSync(fixture.path,{readOnly:true}),before=rows(source);source.close();
   const database=fixture.keep(await prepareDatabase(fixture.path));
-  assert.equal(database.db.prepare('SELECT version FROM metadata').get().version,3);
+  assert.equal(database.db.prepare('SELECT version FROM metadata').get().version,4);
   const {metadata:discardedMetadata,...preserved}=before;
   assert.deepEqual(rows(database.db,v2Tables.slice(1)),preserved);
   const files=backupFiles(fixture.dir);assert.equal(files.length,1);assert.match(files[0],/^pre-migration-v2-.*\.sqlite$/);
@@ -65,7 +65,7 @@ test('v1 upgrades through AI and expense schemas using one original backup',asyn
   const fixture=temporary(t),legacy=createVersion(fixture.path,1);
   legacy.exec("INSERT INTO trips VALUES('trip-1',1,'{}')");legacy.close();
   const database=fixture.keep(await prepareDatabase(fixture.path));
-  assert.equal(database.db.prepare('SELECT version FROM metadata').get().version,3);
+  assert.equal(database.db.prepare('SELECT version FROM metadata').get().version,4);
   assert.equal(database.db.prepare('SELECT count(*) AS n FROM ai_settings').get().n,0);
   assert.equal(database.db.prepare('SELECT count(*) AS n FROM expenses').get().n,0);
   const files=backupFiles(fixture.dir);assert.equal(files.length,1);assert.match(files[0],/^pre-migration-v1-.*\.sqlite$/);
