@@ -7,8 +7,9 @@ import {conflict,missing,validId,validRevision} from '../storage/errors.mjs';
 import {normalizeTripInput,ValidationError} from '../shared/trip-validation.mjs';
 import {getCityByCode} from '../domain/city-catalog.mjs';
 import {getTripStatus,todayDateOnly} from '../shared/date.mjs';
+import {createFootprintLifecycle} from './footprint-lifecycle.mjs';
 function canonical(value) {if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(k=>[k,canonical(value[k])]));return value;}
-export function createTravelService({database,today=todayDateOnly,now=()=>new Date().toISOString(),conversionStore=createAiConversionStore(database)}) {
+export function createTravelService({database,today=todayDateOnly,now=()=>new Date().toISOString(),conversionStore=createAiConversionStore(database),footprintLifecycle=createFootprintLifecycle({database,today,now})}) {
   const trips=createTripStore(database),drafts=createDraftStore(database),expenseStore=createExpenseStore(database),{db}=database;
   const getTrip=id=>{const trip=trips.get(id);if(!trip)throw missing();return trip;};
   return {listTrips:trips.list,getTrip,getDraft:drafts.get,
@@ -30,11 +31,12 @@ export function createTravelService({database,today=todayDateOnly,now=()=>new Da
         if(slot.state!=='active'||slot.targetTripId!==id||slot.sessionId!==command.draft.sessionId||slot.revision!==command.draft.revision||slot.baseTripRevision!==command.expectedTripRevision)throw conflict();
         const content=normalizeTripInput(command.input,getCityByCode);
         const trip=trips.put(id,content,{expectedRevision:command.expectedTripRevision,now:now()});
+        footprintLifecycle.syncTrip(id);
         drafts.close(slot.key,{sessionId:slot.sessionId,revision:slot.revision});
         db.prepare('INSERT INTO save_receipts VALUES(?,?,?,?)').run(command.operationId,id,hash,JSON.stringify(trip));return trip;
       });
     },deleteTrip(id,revision){return database.transaction(()=>{
-      trips.remove(id,revision);const slot=drafts.get(`edit:${id}`);if(slot.state==='active')drafts.close(slot.key,{sessionId:slot.sessionId,revision:slot.revision});conversionStore.markDeleted(id);return true;
+      footprintLifecycle.syncTrip(id);footprintLifecycle.detachTrip(id);trips.remove(id,revision);const slot=drafts.get(`edit:${id}`);if(slot.state==='active')drafts.close(slot.key,{sessionId:slot.sessionId,revision:slot.revision});conversionStore.markDeleted(id);return true;
     });}
   };
 }

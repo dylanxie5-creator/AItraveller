@@ -22,7 +22,7 @@ function fixture(t,{version=1}={}) {
     `);
   // Build real legacy service records, including a retriable save receipt.
   let nested=false;const database={db,transaction(fn){if(nested)return fn();db.exec('BEGIN IMMEDIATE');nested=true;try{const value=fn();db.exec('COMMIT');return value;}catch(error){db.exec('ROLLBACK');throw error;}finally{nested=false;}}};
-  const service=createTravelService({database,now:()=> '2026-10-02T12:00:00.000Z'});
+  const service=createTravelService({database,now:()=> '2026-10-02T12:00:00.000Z',footprintLifecycle:{syncTrip(){},detachTrip(){}}});
   const slot=service.saveDraft('new',{expectedRevision:0,sessionId:'session-b',targetTripId:'trip-1',baseTripRevision:0,step:'confirm',input:input()});
   const command={operationId:'op-1',expectedTripRevision:0,input:input(),draft:{key:'new',sessionId:slot.sessionId,revision:slot.revision}};
   service.saveTrip('trip-1',command);
