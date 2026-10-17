@@ -3,6 +3,13 @@ export function parseRoute(hash) {
   if(path==='/ai/settings')return {type:'ai-settings'};
   if(path==='/ai/new')return {type:'ai-new'};
   if(path==='/ai/plans')return {type:'ai-plans'};
+  if(path==='/footprints')return {type:'footprints'};
+  if(path==='/footprints/new')return {type:'footprint-new'};
+  if(path==='/footprints/manage')return {type:'footprint-manage'};
+  if(path==='/footprints/settings')return {type:'footprint-settings'};
+  let footprint=/^\/footprints\/provinces\/(\d{6})$/.exec(path);if(footprint)return {type:'footprint-province',provinceCode:footprint[1]};
+  footprint=/^\/footprints\/cities\/(\d{6})$/.exec(path);if(footprint)return {type:'footprint-city',cityCode:footprint[1]};
+  footprint=/^\/footprints\/visits\/([a-zA-Z0-9_-]{1,80})\/edit$/.exec(path);if(footprint)return {type:'footprint-edit',visitId:footprint[1]};
   let ai=/^\/ai\/jobs\/([a-zA-Z0-9_-]{1,80})$/.exec(path);
   if(ai)return {type:'ai-job',id:ai[1]};
   ai=/^\/ai\/plans\/([a-zA-Z0-9_-]{1,80})(\/edit)?$/.exec(path);
@@ -22,6 +29,13 @@ export function routeToHash(route) {
   if(route.type==='ai-settings')return '#/ai/settings';
   if(route.type==='ai-new')return '#/ai/new';
   if(route.type==='ai-plans')return '#/ai/plans';
+  if(route.type==='footprints')return '#/footprints';
+  if(route.type==='footprint-new')return '#/footprints/new';
+  if(route.type==='footprint-manage')return '#/footprints/manage';
+  if(route.type==='footprint-settings')return '#/footprints/settings';
+  if(route.type==='footprint-province')return `#/footprints/provinces/${route.provinceCode}`;
+  if(route.type==='footprint-city')return `#/footprints/cities/${route.cityCode}`;
+  if(route.type==='footprint-edit')return `#/footprints/visits/${route.visitId}/edit`;
   if(route.type==='ai-job')return `#/ai/jobs/${route.id}`;
   if(route.type==='ai-plan'||route.type==='ai-plan-edit')return `#/ai/plans/${route.id}${route.type==='ai-plan-edit'?'/edit':''}`;
   if(route.type==='expenses')return `#/trips/${route.id}/expenses`;

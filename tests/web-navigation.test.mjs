@@ -14,6 +14,11 @@ test('expense routes round trip only safe identities',()=>{
   for(const route of routes)assert.deepEqual(parseRoute(routeToHash(route)),route);
   assert.deepEqual(parseRoute('#/trips/bad%2Fid/expenses'),{type:'home'});
 });
+test('footprint routes round trip only safe identities',()=>{
+  const routes=[{type:'footprints'},{type:'footprint-province',provinceCode:'320000'},{type:'footprint-city',cityCode:'320100'},{type:'footprint-new'},{type:'footprint-edit',visitId:'visit-1'},{type:'footprint-manage'},{type:'footprint-settings'}];
+  for(const route of routes)assert.deepEqual(parseRoute(routeToHash(route)),route);
+  for(const hash of ['#/footprints/cities/32%2F0100','#/footprints/visits/bad%2Fid/edit','#/footprints/provinces/123'])assert.deepEqual(parseRoute(hash),{type:'home'});
+});
 test('empty overview is real zero and load errors are not empty trips',async t=>{
   const {service}=setup(t),screens=[];
   const app=createApp({api:{overview:async()=>service.getOverview(),trips:async()=>{throw {code:'NETWORK',message:'加载失败'};}},render:s=>screens.push(s),navigate:()=>{},confirm:()=>false});

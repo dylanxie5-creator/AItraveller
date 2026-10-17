@@ -1,0 +1,34 @@
+import {createFootprintForm} from '../shared/footprint-form-model.mjs';
+
+export function createFootprintController({api,render,navigate,confirm=()=>false,today,createId=()=>crypto.randomUUID(),mapAdapter=null}) {
+  let sequence=0,disposed=false,busy=false,current=null,route=null,form=null,noteOnly=false,pendingCommand=null,error='',query='',cityOptions=[],settingsValues=null,mapState=mapAdapter?'idle':'unavailable',mapError='';
+  function filteredProvinces() {if(current?.type!=='footprints')return [];const text=query.trim();if(!text)return current.overview.provinces;return current.overview.provinces.map(province=>({...province,cities:province.cities.filter(city=>city.cityName.includes(text)||province.provinceName.includes(text))})).filter(province=>province.cities.length);}
+  function snapshot() {
+    const common={route,busy,error,mapState,mapError};
+    if(form)return {...form.snapshot(),...common,type:'footprint-form',visit:current?.visit??null,noteOnly,pendingCommand:pendingCommand?structuredClone(pendingCommand):null,cityOptions:cityOptions.map(item=>({...item}))};
+    if(noteOnly)return {...common,type:'footprint-form',visit:current.visit,noteOnly:true,values:{note:current.note},errors:current.errors??{},firstError:current.errors?.note?'note':null,pendingCommand:pendingCommand?structuredClone(pendingCommand):null,cityOptions:[]};
+    if(settingsValues)return {...common,type:'footprint-settings',settings:current.settings,values:{...settingsValues}};
+    if(current?.type==='footprints')return {...common,...current,query,filteredProvinces:filteredProvinces()};
+    return current?{...common,...current}:null;
+  }
+  const emit=()=>{if(!disposed&&current)render(snapshot());};
+  const fail=failure=>{error=failure?.message??'操作失败，请重试';emit();};
+  async function load(nextRoute) {const token=++sequence;route=nextRoute;form=null;noteOnly=false;pendingCommand=null;settingsValues=null;error='';query='';cityOptions=[];mapError='';if(!disposed)render({type:'footprint-loading',route:nextRoute});try{
+      if(nextRoute.type==='footprints'){await api.syncFootprints();const overview=await api.footprintOverview();current={type:'footprints',overview};}
+      else if(nextRoute.type==='footprint-province')current={type:'footprint-province',province:await api.footprintProvince(nextRoute.provinceCode)};
+      else if(nextRoute.type==='footprint-city')current={type:'footprint-city',city:await api.footprintCity(nextRoute.cityCode)};
+      else if(nextRoute.type==='footprint-manage')current={type:'footprint-manage',management:await api.footprintManage()};
+      else if(nextRoute.type==='footprint-new'){current={type:'footprint-form',visit:null};form=createFootprintForm({today});}
+      else if(nextRoute.type==='footprint-edit'){const visit=await api.footprintVisit(nextRoute.visitId);current={type:'footprint-form',visit};if(visit.source==='manual')form=createFootprintForm({visit,today});else{noteOnly=true;current.note=visit.note;current.errors={};}}
+      else if(nextRoute.type==='footprint-settings'){const settings=await api.mapSettings();current={type:'footprint-settings',settings};settingsValues={keyAction:settings.keyConfigured?'retain':'replace',keyValue:'',securityAction:settings.securityConfigured?'retain':'replace',securityValue:''};}
+      else throw {message:'页面不存在'};if(token!==sequence||disposed)return;emit();
+    }catch(failure){if(token===sequence&&!disposed){current={type:'footprint-error',route:nextRoute};fail(failure);}}}
+  function setField(name,value) {if(disposed||busy)return;if(current?.type==='footprints'&&name==='query'){query=String(value);emit();return;}if(settingsValues&&Object.hasOwn(settingsValues,name)){settingsValues[name]=value;error='';emit();return;}if(noteOnly&&name==='note'){current.note=value;current.errors={};error='';pendingCommand=null;emit();return;}if(form){form.setField(name,value);error='';pendingCommand=null;emit();}}
+  async function searchCities(text) {if(disposed||!form)return;const token=sequence;try{cityOptions=text.trim()?await api.cities(text):[];if(token===sequence&&!disposed)emit();}catch(failure){if(token===sequence&&!disposed)fail(failure);}}
+  async function save() {if(disposed||busy||(!form&&!noteOnly))return;busy=true;emit();try{let input;if(noteOnly){const note=typeof current.note==='string'?current.note.trim():'';if([...note].length>200){current.errors={note:'备注最多200字'};error='请检查填写内容';emit();return;}input={note};}else{if(!form.validate()){error='请检查填写内容';emit();return;}input=form.toInput();}const visitId=route.type==='footprint-edit'?route.visitId:(pendingCommand?.visitId??createId());if(!pendingCommand)pendingCommand={visitId,operationId:createId(),expectedRevision:current.visit?.revision??0,input};const {visitId:id,...command}=pendingCommand;await api.saveFootprintVisit(id,command);pendingCommand=null;error='';if(!disposed)navigate({type:'footprint-manage'});}catch(failure){fail(failure);}finally{busy=false;emit();}}
+  async function deleteVisit(visit) {if(disposed||busy||!await confirm('确定删除这条足迹记录吗？'))return;busy=true;emit();try{await api.deleteFootprintVisit(visit.id,{operationId:createId(),expectedRevision:visit.revision});if(!disposed)await load({type:'footprint-manage'});}catch(failure){fail(failure);}finally{busy=false;emit();}}
+  async function suppress(visit) {if(disposed||busy||visit.source!=='trip'||!await confirm('确定撤销这条自动足迹吗？之后可以恢复。'))return;busy=true;emit();try{await api.suppressFootprint(visit.linkedTripId,visit.cityCode,{operationId:createId()});if(!disposed)await load({type:'footprint-manage'});}catch(failure){fail(failure);}finally{busy=false;emit();}}
+  async function restore(item) {if(disposed||busy||!await confirm('恢复这座城市的自动足迹资格吗？'))return;busy=true;emit();try{await api.restoreFootprint(item.tripId,item.cityCode,{operationId:createId()});if(!disposed)await load({type:'footprint-manage'});}catch(failure){fail(failure);}finally{busy=false;emit();}}
+  async function saveSettings() {if(disposed||busy||!settingsValues)return;busy=true;emit();try{const entry=(action,value)=>({action,...(action==='replace'?{value}:{})});const saved=await api.saveMapSettings({expectedRevision:current.settings.revision,key:entry(settingsValues.keyAction,settingsValues.keyValue),security:entry(settingsValues.securityAction,settingsValues.securityValue)});current.settings=saved;settingsValues={keyAction:saved.keyConfigured?'retain':'replace',keyValue:'',securityAction:saved.securityConfigured?'retain':'replace',securityValue:''};error='';emit();}catch(failure){fail(failure);}finally{busy=false;emit();}}
+  return {load,setField,searchCities,save,deleteVisit,suppress,restore,saveSettings,dispose(){disposed=true;sequence++;mapAdapter?.destroy?.();},snapshot};
+}
