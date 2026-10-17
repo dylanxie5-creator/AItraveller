@@ -11,9 +11,10 @@ export function createFootprintController({api,render,navigate,confirm=()=>false
     if(current?.type==='footprints')return {...common,...current,query,filteredProvinces:filteredProvinces()};
     return current?{...common,...current}:null;
   }
-  const emit=()=>{if(!disposed&&current)render(snapshot());};
+  const emit=()=>{if(!disposed&&current)return render(snapshot());};
   const fail=failure=>{error=failure?.message??'操作失败，请重试';emit();};
-  async function load(nextRoute) {const token=++sequence;route=nextRoute;form=null;noteOnly=false;pendingCommand=null;settingsValues=null;error='';query='';cityOptions=[];mapError='';if(!disposed)render({type:'footprint-loading',route:nextRoute});try{
+  async function mountMap(token) {mapState='loading';const container=emit();try{const session=await api.mapSession();if(token!==sequence||disposed)return;const provinces=current.overview.provinces.map(province=>({provinceCode:province.provinceCode,provinceName:province.provinceName,cities:province.cities.map(city=>({cityCode:city.cityCode,cityName:city.cityName}))}));const result=await mapAdapter.mount(container,{session,provinces,onProvince:provinceCode=>{if(token===sequence&&!disposed)navigate({type:'footprint-province',provinceCode});},onCity:cityCode=>{if(token===sequence&&!disposed)navigate({type:'footprint-city',cityCode});}});if(token!==sequence||disposed)return;mapState='ready';mapError=result.warnings?.length?`部分省份暂未绘制：${result.warnings.join('、')}`:'';emit();}catch(failure){if(token!==sequence||disposed)return;mapState='error';mapError=failure?.message??'地图暂时无法加载';emit();}}
+  async function load(nextRoute) {if(mapAdapter&&sequence>0)mapAdapter.destroy();const token=++sequence;route=nextRoute;form=null;noteOnly=false;pendingCommand=null;settingsValues=null;error='';query='';cityOptions=[];mapError='';mapState=mapAdapter?'idle':'unavailable';if(!disposed)render({type:'footprint-loading',route:nextRoute});try{
       if(nextRoute.type==='footprints'){await api.syncFootprints();const overview=await api.footprintOverview();current={type:'footprints',overview};}
       else if(nextRoute.type==='footprint-province')current={type:'footprint-province',province:await api.footprintProvince(nextRoute.provinceCode)};
       else if(nextRoute.type==='footprint-city')current={type:'footprint-city',city:await api.footprintCity(nextRoute.cityCode)};
@@ -21,7 +22,7 @@ export function createFootprintController({api,render,navigate,confirm=()=>false
       else if(nextRoute.type==='footprint-new'){current={type:'footprint-form',visit:null};form=createFootprintForm({today});}
       else if(nextRoute.type==='footprint-edit'){const visit=await api.footprintVisit(nextRoute.visitId);current={type:'footprint-form',visit};if(visit.source==='manual')form=createFootprintForm({visit,today});else{noteOnly=true;current.note=visit.note;current.errors={};}}
       else if(nextRoute.type==='footprint-settings'){const settings=await api.mapSettings();current={type:'footprint-settings',settings};settingsValues={keyAction:settings.keyConfigured?'retain':'replace',keyValue:'',securityAction:settings.securityConfigured?'retain':'replace',securityValue:''};}
-      else throw {message:'页面不存在'};if(token!==sequence||disposed)return;emit();
+      else throw {message:'页面不存在'};if(token!==sequence||disposed)return;emit();if(nextRoute.type==='footprints'&&mapAdapter)await mountMap(token);
     }catch(failure){if(token===sequence&&!disposed){current={type:'footprint-error',route:nextRoute};fail(failure);}}}
   function setField(name,value) {if(disposed||busy)return;if(current?.type==='footprints'&&name==='query'){query=String(value);emit();return;}if(settingsValues&&Object.hasOwn(settingsValues,name)){settingsValues[name]=value;error='';emit();return;}if(noteOnly&&name==='note'){current.note=value;current.errors={};error='';pendingCommand=null;emit();return;}if(form){form.setField(name,value);error='';pendingCommand=null;emit();}}
   async function searchCities(text) {if(disposed||!form)return;const token=sequence;try{cityOptions=text.trim()?await api.cities(text):[];if(token===sequence&&!disposed)emit();}catch(failure){if(token===sequence&&!disposed)fail(failure);}}
