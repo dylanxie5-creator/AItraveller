@@ -21,6 +21,8 @@ import {createModelAdapters} from './ai/model-adapters.mjs';
 import {getCityByCode} from './domain/city-catalog.mjs';
 import {createHttpApp} from './server/http-app.mjs';
 import {createFootprintService} from './services/footprint-service.mjs';
+import {createMapSettingsStore} from './storage/map-settings-store.mjs';
+import {createAmapProxy} from './server/amap-proxy.mjs';
 function createProductionAi({database}) {
   const settings=createAiSettingsStore(database,{protector:createDpapiProtector()}),jobStore=createAiJobStore(database),planStore=createAiPlanStore(database),conversionStore=createAiConversionStore(database),tripStore=createTripStore(database);
   const transport=createHttpsTransport(),search=createZhipuSearch({transport}),models=createModelAdapters({transport});
@@ -49,9 +51,9 @@ export async function startServer({dbPath=fileURLToPath(new URL('../runtime/trav
   });
   try {
     guard();database=await prepareDatabase(dbPath,{signal:controller.signal});guard();ai=await aiFactory({database,signal:controller.signal});ai.jobs.recover();guard();
-    const footprints=createFootprintService({database});footprints.syncAll();const service=createTravelService({database}),expenses=createExpenseService({database});guard();
+    const footprints=createFootprintService({database});footprints.syncAll();const service=createTravelService({database}),expenses=createExpenseService({database}),mapSettings=createMapSettingsStore(database,{protector:createDpapiProtector()}),amapProxy=createAmapProxy({settingsStore:mapSettings});guard();
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,()=>{server.off('error',reject);resolve();});});guard();
-    const actual=server.address().port;const app=createHttpApp({service,expenses,footprints,ai,allowedHosts:[`127.0.0.1:${actual}`,`localhost:${actual}`]});
+    const actual=server.address().port;const app=createHttpApp({service,expenses,footprints,mapSettings,amapProxy,ai,allowedHosts:[`127.0.0.1:${actual}`,`localhost:${actual}`]});
     server.on('request',(request,response)=>{
       if(ownershipLost||closing){response.writeHead(503);response.end();return;}
       app(request,response);
