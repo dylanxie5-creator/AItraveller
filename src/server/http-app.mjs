@@ -10,7 +10,7 @@ const aiMessages={AI_CREDENTIALS_UNAVAILABLE:'已保存的密钥无法读取，�
 export function createHttpApp({service,expenses,footprints,mapSettings,amapProxy,ai,webRoot,sharedRoot,allowedHosts}) {
   return async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer');
-    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline' https://*.amap.com; img-src 'self' data: blob: https://*.amap.com; connect-src 'self' https://*.amap.com; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-eval' https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline' https://*.amap.com; img-src 'self' data: blob: https://*.amap.com; connect-src 'self' https://*.amap.com; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     function json(status,payload){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(payload));}
     try {
       guardRequest(req,allowedHosts);

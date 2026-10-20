@@ -18,7 +18,7 @@ test('first setup requires a pair and public/session views never reveal security
   await assert.rejects(store.update({expectedRevision:0,key:{action:'replace',value:JS_KEY},security:{action:'retain'}}),error=>error.code==='VALIDATION');
   const saved=await store.update(replace());assert.deepEqual({revision:saved.revision,keyConfigured:saved.keyConfigured,securityConfigured:saved.securityConfigured,complete:saved.complete},{revision:1,keyConfigured:true,securityConfigured:true,complete:true});
   const text=JSON.stringify(saved);assert.equal(text.includes(JS_KEY),false);assert.equal(text.includes(SECURITY),false);
-  const session=await store.resolveSession();assert.deepEqual(session,{provider:'amap',revision:1,key:JS_KEY,serviceHost:'/_AMapService/1'});assert.equal(JSON.stringify(session).includes(SECURITY),false);
+  const session=await store.resolveSession();assert.deepEqual(session,{provider:'amap',revision:1,key:JS_KEY,serviceHost:'/_AMapService'});assert.equal(JSON.stringify(session).includes(SECURITY),false);assert.equal(await store.resolveSecurityCode(),SECURITY);
   assert.equal(await store.resolveSecurityCode(1),SECURITY);
 });
 

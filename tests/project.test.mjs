@@ -24,6 +24,7 @@ test('browser CSP uses a fixed AMap allowlist without user-controlled values',as
     assert.match(csp,/default-src 'self'/);
     assert.match(csp,/https:\/\/webapi\.amap\.com/);
     assert.match(csp,/https:\/\/\*\.amap\.com/);
+    assert.match(csp,/script-src[^;]*'unsafe-eval'/);
     assert.match(csp,/connect-src 'self'/);
     assert.doesNotMatch(csp,/user-map-host|securityJsCode|api[_-]?key/i);
   } finally {await running.close();}
