@@ -25,7 +25,7 @@ function createProductionAi({database}) {
   const plans=createAiPlanService({database,planStore,conversionStore,tripStore,resolveCity:getCityByCode});
   return {settings,jobs,plans};
 }
-export async function startServer({dbPath=fileURLToPath(new URL('../runtime/travel.sqlite',import.meta.url)),port=3210,host='127.0.0.1',lockFactory=acquireDatabaseLock,aiFactory=createProductionAi}={}) {
+export async function startServer({dbPath=fileURLToPath(new URL('../runtime/travel.sqlite',import.meta.url)),port=3210,host='127.0.0.1',lockFactory=acquireDatabaseLock,aiFactory=createProductionAi,uploadDirectory,uploadLimit}={}) {
   if(host!=='127.0.0.1')throw new Error('Only loopback is supported');
   mkdirSync(dirname(dbPath),{recursive:true});dbPath=canonicalDatabasePath(dbPath);const ownership=await lockFactory(dbPath);
   const server=createServer();const controller=new AbortController();let runtime,starting=true,ownershipLost=false,closing,resolveClosed;
@@ -48,7 +48,7 @@ export async function startServer({dbPath=fileURLToPath(new URL('../runtime/trav
     guard();runtime=createDataRuntime({dbPath,aiFactory,protectorFactory:createDpapiProtector});await runtime.start({signal:controller.signal});guard();
     const {service,expenses,footprints,mapSettings,amapProxy,ai}=runtime.current();
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,()=>{server.off('error',reject);resolve();});});guard();
-    const actual=server.address().port;const app=createHttpApp({service,expenses,footprints,mapSettings,amapProxy,ai,allowedHosts:[`127.0.0.1:${actual}`,`localhost:${actual}`]});
+    const actual=server.address().port;const app=createHttpApp({runtime,service,expenses,footprints,mapSettings,amapProxy,ai,allowedHosts:[`127.0.0.1:${actual}`,`localhost:${actual}`],...(uploadDirectory?{uploadDirectory}:{}),...(uploadLimit?{uploadLimit}:{})});
     server.on('request',(request,response)=>{
       if(ownershipLost||closing){response.writeHead(503);response.end();return;}
       app(request,response);
