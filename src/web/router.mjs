@@ -1,5 +1,6 @@
 export function parseRoute(hash) {
   const path=String(hash??'').replace(/^#/,'');
+  if(path==='/data')return {type:'data'};
   if(path==='/ai/settings')return {type:'ai-settings'};
   if(path==='/ai/new')return {type:'ai-new'};
   if(path==='/ai/plans')return {type:'ai-plans'};
@@ -26,6 +27,7 @@ export function routeToHash(route) {
   if(route.type==='home')return '#/';
   if(route.type==='trips')return '#/trips';
   if(route.type==='new')return '#/new';
+  if(route.type==='data')return '#/data';
   if(route.type==='ai-settings')return '#/ai/settings';
   if(route.type==='ai-new')return '#/ai/new';
   if(route.type==='ai-plans')return '#/ai/plans';

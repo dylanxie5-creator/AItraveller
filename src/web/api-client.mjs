@@ -1,12 +1,15 @@
 export function createApiClient({fetchImpl=globalThis.fetch,baseUrl=''}={}) {
+  async function payload(response) {
+    let value;try{value=await response.json();}catch{throw {status:response.status,code:'NETWORK',message:'服务返回异常，请重试'};}
+    if(!response.ok)throw {status:response.status,...value.error};return value.data;
+  }
   async function call(path,method='GET',body) {
     let response;
     try{response=await fetchImpl(baseUrl+path,{method,headers:body===undefined?{}:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});}
     catch{throw {status:0,code:'NETWORK',message:'本机服务未连接，请确认网站已启动后重试'};}
-    let payload;try{payload=await response.json();}catch{throw {status:response.status,code:'NETWORK',message:'服务返回异常，请重试'};}
-    if(!response.ok)throw {status:response.status,...payload.error};
-    return payload.data;
+    return payload(response);
   }
+  async function upload(path,body) {let response;try{response=await fetchImpl(baseUrl+path,{method:'POST',headers:{'Content-Type':'application/vnd.sqlite3'},body});}catch{throw {status:0,code:'NETWORK',message:'本机服务未连接，请确认网站已启动后重试'};}return payload(response);}
   const key=k=>encodeURIComponent(k);
   return {
     overview:()=>call('/api/overview'),trips:()=>call('/api/trips'),trip:id=>call('/api/trips/'+key(id)),cities:q=>call('/api/cities?q='+key(q)),
@@ -21,6 +24,8 @@ export function createApiClient({fetchImpl=globalThis.fetch,baseUrl=''}={}) {
     aiSettings:()=>call('/api/ai/settings'),saveAiSettings:command=>call('/api/ai/settings','PUT',command),
     aiJobs:()=>call('/api/ai/jobs'),aiJob:id=>call('/api/ai/jobs/'+key(id)),startAiJob:command=>call('/api/ai/jobs','POST',command),
     aiPlans:()=>call('/api/ai/plans'),aiPlan:id=>call('/api/ai/plans/'+key(id)),updateAiPlan:(id,command)=>call('/api/ai/plans/'+key(id),'PUT',command),
-    convertAiPlan:(id,command)=>call('/api/ai/plans/'+key(id)+'/convert','POST',command),tripGuide:id=>call('/api/ai/trips/'+key(id)+'/guide')
+    convertAiPlan:(id,command)=>call('/api/ai/plans/'+key(id)+'/convert','POST',command),tripGuide:id=>call('/api/ai/trips/'+key(id)+'/guide'),
+    dataBackups:()=>call('/api/data/backups'),createDataBackup:note=>call('/api/data/backups','POST',{note}),importDataBackup:file=>upload('/api/data/backups/import',file),
+    restoreDataBackup:id=>call('/api/data/backups/'+key(id)+'/restore','POST',{confirmation:'恢复数据'}),dataBackupDownloadUrl:id=>baseUrl+'/api/data/backups/'+key(id)+'/download'
   };
 }

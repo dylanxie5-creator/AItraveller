@@ -8,7 +8,7 @@ import {presentTrip} from '../src/domain/trip-presenter.mjs';
 import {setup,prepare} from './helpers/database.mjs';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 test('navigation parses only known routes and safely decodes trip ids',()=>{
-  assert.deepEqual(parseRoute('#/trips/trip-1/edit'),{type:'edit',id:'trip-1'});assert.deepEqual(parseRoute('#/new'),{type:'new'});assert.deepEqual(parseRoute('#/bad'),{type:'home'});
+  assert.deepEqual(parseRoute('#/trips/trip-1/edit'),{type:'edit',id:'trip-1'});assert.deepEqual(parseRoute('#/new'),{type:'new'});assert.deepEqual(parseRoute('#/data'),{type:'data'});assert.equal(routeToHash({type:'data'}),'#/data');assert.deepEqual(parseRoute('#/bad'),{type:'home'});
 });
 test('expense routes round trip only safe identities',()=>{
   const routes=[{type:'expenses',id:'trip-1'},{type:'expense-new',id:'trip-1'},{type:'expense-edit',id:'trip-1',expenseId:'expense-1'},{type:'expense-categories',id:'trip-1'}];
@@ -25,6 +25,7 @@ test('footprint navigation uses its own active destinations',()=>{
   assert.equal(navigationSection({type:'footprint-city',cityCode:'320100'}),'footprints');
   assert.equal(navigationSection({type:'footprint-settings'}),'footprint-settings');
   assert.equal(navigationSection({type:'expenses',id:'trip-1'}),'trips');
+  assert.equal(navigationSection({type:'data'}),'data');
 });
 test('home footprint summary exposes real counts, empty state and destination',()=>{
   assert.deepEqual(homeFootprintSummary({footprints:{provinceCount:3,cityCount:7,visitCount:12}}),{provinceCount:3,cityCount:7,visitCount:12,empty:false,route:{type:'footprints'}});
