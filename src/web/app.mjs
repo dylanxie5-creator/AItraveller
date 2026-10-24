@@ -21,7 +21,7 @@ export function navigationSection(route) {
   if(footprintRoutes.has(route.type))return 'footprints';
   return route.type==='ai-settings'?'ai-settings':'ai';
 }
-export function hasPendingWrites(states) {return states.filter(Boolean).some(state=>Boolean(state.dirty||state.hasPendingSave||state.pendingCommand));}
+export function hasPendingWrites(states) {return states.filter(Boolean).some(state=>Boolean(state.busy||state.dirty||state.hasPendingSave||state.pendingCommand));}
 export function createFootprintRuntime({api,root,navigate,confirm,render=renderFootprintView,controllerFactory=createFootprintController,adapterFactory=()=>createAmapAdapter({window:globalThis.window,document:globalThis.document})}) {
   let controller=null;
   function dispose() {controller?.dispose();controller=null;}

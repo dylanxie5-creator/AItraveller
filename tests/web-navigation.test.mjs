@@ -38,8 +38,8 @@ test('footprint runtime replaces and disposes one controller per route',async()=
   runtime.dispose();
   assert.deepEqual(events,[['load','footprints',true],'controller-dispose',['load','footprint-city',false],'controller-dispose']);
 });
-test('before unload warning is limited to unsaved or pending writes',()=>{
-  assert.equal(hasPendingWrites([{busy:true}]),false);
+test('before unload warns for active or unresolved writes but not idle state',()=>{
+  assert.equal(hasPendingWrites([{busy:true}]),true);
   assert.equal(hasPendingWrites([{dirty:true}]),true);
   assert.equal(hasPendingWrites([{hasPendingSave:true}]),true);
   assert.equal(hasPendingWrites([{pendingCommand:{operationId:'save-1'}}]),true);
