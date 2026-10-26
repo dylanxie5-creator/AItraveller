@@ -19,7 +19,7 @@ const restoreFailure=()=>new StoreError('DATA_RESTORE_FAILED','无法恢复数�
 
 export function createDataRuntime({dbPath,aiFactory,protectorFactory=createDpapiProtector,backupStoreFactory=createDataBackupStore,fileOps={}}={}) {
   if(typeof dbPath!=='string'||typeof aiFactory!=='function')throw new TypeError('Data runtime configuration is invalid');
-  const files={...nativeFiles,...fileOps},coordinator=createMutationCoordinator();let active=null,started=false,closing,signal,lastBackupWarning=null;
+  const files={...nativeFiles,...fileOps},coordinator=createMutationCoordinator();let active=null,started=false,closing,activeRestore,signal,lastBackupWarning=null;
   const backups=backupStoreFactory({dbPath,getDatabase:()=>{
     if(!active?.database)throw new StoreError('STORAGE_FAILED','本机数据服务尚未启动');
     return active.database;
@@ -64,11 +64,12 @@ export function createDataRuntime({dbPath,aiFactory,protectorFactory=createDpapi
     ensureAutomaticBackup,
     backupWarning:()=>lastBackupWarning,
     async restore(backupId) {
+      if(closing)throw new StoreError('STORAGE_FAILED','本机数据服务正在关闭');
       const selected=backups.resolve(backupId),stage=`${dbPath}.restore-${randomUUID()}.partial`,rollback=`${dbPath}.rollback-${randomUUID()}`;
       try {files.copyFileSync(selected.path,stage,files.constants.COPYFILE_EXCL);verify(stage,selected.record.fingerprint);}
       catch(error){clean(files,stage);throw error?.code?error:new StoreError('DATA_BACKUP_INVALID','备份文件已损坏或不完整');}
       try {
-        return await coordinator.runRestore(async()=>{
+        const operation=coordinator.runRestore(async()=>{
           verify(stage,selected.record.fingerprint);
           const safetyBackup=await backups.create('pre-restore',{note:'恢复前自动保留'});
           await active.ai?.jobs?.shutdown?.();active.database.close();active=null;
@@ -84,11 +85,18 @@ export function createDataRuntime({dbPath,aiFactory,protectorFactory=createDpapi
             throw restoreFailure();
           }
         });
+        activeRestore=operation;
+        try{return await operation;}finally{if(activeRestore===operation)activeRestore=null;}
       } finally {clean(files,stage);}
     },
     async close() {
       if(closing)return closing;
-      closing=(async()=>{if(active){try{await active.ai?.jobs?.shutdown?.();}finally{active.database.close();active=null;}}started=false;})();
+      closing=(async()=>{
+        if(activeRestore)try{await activeRestore;}catch{}
+        const context=active;
+        if(context){try{await context.ai?.jobs?.shutdown?.();}finally{context.database.close();if(active===context)active=null;}}
+        started=false;
+      })();
       return closing;
     },
   };

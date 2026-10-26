@@ -126,3 +126,31 @@ test('server keeps database ownership while its runtime restores and releases it
   assert.equal(releases,0);assert.deepEqual(running.runtime.current().service.listTrips().map(item=>item.id),['trip-a']);
   await running.close();assert.equal(releases,1);
 });
+
+test('runtime close waits for an active restore and closes the replacement context',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'travel-runtime-close-restore-')),path=join(dir,'travel.sqlite');
+  const shutdownEntered=deferred(),releaseShutdown=deferred();let generation=0,replacementShutdowns=0;
+  const blockingAiFactory=({database})=>{
+    const currentGeneration=++generation;
+    return {
+      settings:createAiSettingsStore(database,{protector}),plans:{},
+      jobs:{recover(){},async shutdown(){
+        if(currentGeneration===1){shutdownEntered.resolve();await releaseShutdown.promise;}
+        else replacementShutdowns++;
+      }},
+    };
+  };
+  const runtime=createDataRuntime({dbPath:path,aiFactory:blockingAiFactory,protectorFactory:()=>protector});
+  await runtime.start();t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  let current=runtime.current();current.service.saveTrip('trip-a',prepare(current.service,'trip-a'));
+  const backup=await current.backups.create('manual',{note:'关闭恢复竞态'});
+  current.service.deleteTrip('trip-a',1);current.service.saveTrip('trip-b',prepare(current.service,'trip-b'));
+
+  const restoring=runtime.restore(backup.id);await shutdownEntered.promise;
+  let closed=false;const closing=runtime.close().then(()=>{closed=true;});
+  await Promise.resolve();assert.equal(closed,false);
+  releaseShutdown.resolve();await Promise.all([restoring,closing]);
+
+  assert.equal(replacementShutdowns,1);
+  assert.throws(()=>runtime.current(),error=>error.code==='STORAGE_FAILED');
+});

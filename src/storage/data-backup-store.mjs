@@ -3,7 +3,7 @@ import {
   closeSync,copyFileSync,existsSync,mkdirSync,openSync,readFileSync,readdirSync,
   realpathSync,renameSync,rmSync,statSync,writeFileSync,
 } from 'node:fs';
-import {dirname,join,resolve} from 'node:path';
+import {basename,dirname,join,resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {validateDatabase} from './database.mjs';
 import {databaseFingerprint} from './migration-backup.mjs';
@@ -30,6 +30,7 @@ function dateValue(value) {
 export function createDataBackupStore({dbPath,getDatabase,backupImpl=backup,clock=()=>new Date(),createId=randomUUID}={}) {
   if(typeof dbPath!=='string'||typeof getDatabase!=='function')throw new TypeError('Backup store configuration is invalid');
   const databasePath=resolve(dbPath),root=join(dirname(databasePath),'backups','data');
+  const databaseFile=process.platform==='win32'?basename(databasePath).toLowerCase():basename(databasePath);
 
   function ensureRoot() {
     const parent=realpathSync(dirname(databasePath));
@@ -51,10 +52,11 @@ export function createDataBackupStore({dbPath,getDatabase,backupImpl=backup,cloc
     try {
       record=JSON.parse(readFileSync(target.metadata,'utf8'));
       if(!record||typeof record!=='object'||Array.isArray(record)||record.id!==id||!identity.test(record.id)||!kinds.has(record.kind)||typeof record.createdAt!=='string'||new Date(record.createdAt).toISOString()!==record.createdAt||typeof record.note!=='string'||Array.from(record.note).length>80||!Number.isSafeInteger(record.sizeBytes)||record.sizeBytes<=0||typeof record.fingerprint!=='string'||!/^[a-f0-9]{64}$/.test(record.fingerprint))throw new Error('invalid metadata');
+      if(record.databaseFile!==databaseFile)throw failure('NOT_FOUND','备份不存在');
       actual=verifyFile(target.sqlite);
       if(actual.sizeBytes!==record.sizeBytes||actual.fingerprint!==record.fingerprint)throw new Error('mismatch');
       return {record:{id:record.id,kind:record.kind,createdAt:record.createdAt,sizeBytes:record.sizeBytes,note:record.note,fingerprint:record.fingerprint},path:target.sqlite};
-    } catch {throw failure('DATA_BACKUP_INVALID','备份文件已损坏或不完整');}
+    } catch(error) {if(error instanceof StoreError)throw error;throw failure('DATA_BACKUP_INVALID','备份文件已损坏或不完整');}
   }
   function allocate() {
     ensureRoot();
@@ -73,7 +75,7 @@ export function createDataBackupStore({dbPath,getDatabase,backupImpl=backup,cloc
       let verified;
       try{verified=verifyFile(slot.partial);}catch{throw failure(invalidCode,invalidCode==='DATA_BACKUP_INVALID'?'选择的文件不是有效的智游足迹备份':'无法创建完整的数据备份');}
       const record={id:slot.id,kind,createdAt,sizeBytes:verified.sizeBytes,note,fingerprint:verified.fingerprint};
-      writeFileSync(slot.metadataPartial,JSON.stringify(record),{encoding:'utf8',flag:'wx',mode:0o600});
+      writeFileSync(slot.metadataPartial,JSON.stringify({...record,databaseFile}),{encoding:'utf8',flag:'wx',mode:0o600});
       renameSync(slot.partial,slot.target.sqlite);sqlitePublished=true;
       renameSync(slot.metadataPartial,slot.target.metadata);
       return record;

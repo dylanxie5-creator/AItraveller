@@ -5,7 +5,7 @@ import {existsSync,mkdtempSync,readFileSync,readdirSync,rmSync,writeFileSync} fr
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createDataBackupStore} from '../src/storage/data-backup-store.mjs';
-import {validateDatabase} from '../src/storage/database.mjs';
+import {openDatabase,validateDatabase} from '../src/storage/database.mjs';
 import {setup,prepare} from './helpers/database.mjs';
 
 const ids=[
@@ -139,4 +139,21 @@ test('remove deletes only an exact managed backup pair',async t=>{
   store.remove(first.id);
   assert.deepEqual(store.list().map(item=>item.id),[second.id]);
   assert.throws(()=>store.remove('../travel.sqlite'),error=>error.code==='NOT_FOUND');
+});
+
+test('databases beside each other keep independent backup catalogs',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'travel-backup-catalogs-'));
+  const firstPath=join(dir,'primary.sqlite'),secondPath=join(dir,'qa.sqlite');
+  const firstDatabase=openDatabase(firstPath),secondDatabase=openDatabase(secondPath);
+  t.after(()=>{firstDatabase.close();secondDatabase.close();rmSync(dir,{recursive:true,force:true});});
+  const first=factory(firstDatabase,firstPath,{idValues:[ids[0]]});
+  const second=factory(secondDatabase,secondPath,{idValues:[ids[1]]});
+
+  const firstRecord=await first.create('manual',{note:'正式数据'});
+  assert.deepEqual(second.list(),[]);
+  const secondRecord=await second.create('manual',{note:'验收数据'});
+
+  assert.deepEqual(first.list().map(item=>item.id),[firstRecord.id]);
+  assert.deepEqual(second.list().map(item=>item.id),[secondRecord.id]);
+  assert.throws(()=>first.resolve(secondRecord.id),error=>error.code==='NOT_FOUND');
 });
