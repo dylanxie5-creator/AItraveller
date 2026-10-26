@@ -20,6 +20,11 @@ test('footprint routes round trip only safe identities',()=>{
   for(const route of routes)assert.deepEqual(parseRoute(routeToHash(route)),route);
   for(const hash of ['#/footprints/cities/32%2F0100','#/footprints/visits/bad%2Fid/edit','#/footprints/provinces/123'])assert.deepEqual(parseRoute(hash),{type:'home'});
 });
+test('archive routes round trip only safe identities',()=>{
+  const routes=[{type:'archive-home'},{type:'archive-print'},{type:'trip-archive-print',id:'trip-1'}];
+  for(const route of routes)assert.deepEqual(parseRoute(routeToHash(route)),route);
+  for(const hash of ['#/reports/trips/bad%2Fid/print','#/reports/trips/%252e%252e/print','#/reports/trips/a.b/print'])assert.deepEqual(parseRoute(hash),{type:'home'});
+});
 test('footprint navigation uses its own active destinations',()=>{
   assert.equal(navigationSection({type:'footprints'}),'footprints');
   assert.equal(navigationSection({type:'footprint-city',cityCode:'320100'}),'footprints');

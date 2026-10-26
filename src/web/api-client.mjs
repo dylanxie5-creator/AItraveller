@@ -26,6 +26,7 @@ export function createApiClient({fetchImpl=globalThis.fetch,baseUrl=''}={}) {
     aiPlans:()=>call('/api/ai/plans'),aiPlan:id=>call('/api/ai/plans/'+key(id)),updateAiPlan:(id,command)=>call('/api/ai/plans/'+key(id),'PUT',command),
     convertAiPlan:(id,command)=>call('/api/ai/plans/'+key(id)+'/convert','POST',command),tripGuide:id=>call('/api/ai/trips/'+key(id)+'/guide'),
     dataBackups:()=>call('/api/data/backups'),createDataBackup:note=>call('/api/data/backups','POST',{note}),importDataBackup:file=>upload('/api/data/backups/import',file),
-    restoreDataBackup:id=>call('/api/data/backups/'+key(id)+'/restore','POST',{confirmation:'恢复数据'}),dataBackupDownloadUrl:id=>baseUrl+'/api/data/backups/'+key(id)+'/download'
+    restoreDataBackup:id=>call('/api/data/backups/'+key(id)+'/restore','POST',{confirmation:'恢复数据'}),dataBackupDownloadUrl:id=>baseUrl+'/api/data/backups/'+key(id)+'/download',
+    travelArchive:()=>call('/api/archive'),tripArchive:id=>call('/api/archive/trips/'+key(id))
   };
 }

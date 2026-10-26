@@ -1,5 +1,8 @@
 export function parseRoute(hash) {
   const path=String(hash??'').replace(/^#/,'');
+  if(path==='/archive')return {type:'archive-home'};
+  if(path==='/reports/archive/print')return {type:'archive-print'};
+  const archive=/^\/reports\/trips\/([a-zA-Z0-9_-]{1,80})\/print$/.exec(path);if(archive)return {type:'trip-archive-print',id:archive[1]};
   if(path==='/data')return {type:'data'};
   if(path==='/ai/settings')return {type:'ai-settings'};
   if(path==='/ai/new')return {type:'ai-new'};
@@ -28,6 +31,9 @@ export function routeToHash(route) {
   if(route.type==='trips')return '#/trips';
   if(route.type==='new')return '#/new';
   if(route.type==='data')return '#/data';
+  if(route.type==='archive-home')return '#/archive';
+  if(route.type==='archive-print')return '#/reports/archive/print';
+  if(route.type==='trip-archive-print')return `#/reports/trips/${route.id}/print`;
   if(route.type==='ai-settings')return '#/ai/settings';
   if(route.type==='ai-new')return '#/ai/new';
   if(route.type==='ai-plans')return '#/ai/plans';
