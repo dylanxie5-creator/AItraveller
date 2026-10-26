@@ -9,6 +9,7 @@ import {createDataRuntime} from '../src/services/data-runtime.mjs';
 import {createAiSettingsStore} from '../src/storage/ai-settings-store.mjs';
 import {startServer} from '../src/start.mjs';
 import {prepare} from './helpers/database.mjs';
+import {request} from './helpers/http-client.mjs';
 
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
 
@@ -125,6 +126,16 @@ test('server keeps database ownership while its runtime restores and releases it
   await running.runtime.restore(backup.id);
   assert.equal(releases,0);assert.deepEqual(running.runtime.current().service.listTrips().map(item=>item.id),['trip-a']);
   await running.close();assert.equal(releases,1);
+});
+
+test('restored runtime serves replacement archives while an earlier report stays detached',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'travel-runtime-archive-')),path=join(dir,'travel.sqlite'),ownership={lost:new Promise(()=>{}),async release(){}};
+  const running=await startServer({dbPath:path,port:0,lockFactory:async()=>ownership,aiFactory});t.after(async()=>{await running.close();rmSync(dir,{recursive:true,force:true});});
+  let current=running.runtime.current(),commandA=prepare(current.service,'trip-a');commandA={...commandA,input:{...commandA.input,name:'档案 A'}};current.service.saveTrip('trip-a',commandA);const backup=await current.backups.create('manual',{note:'档案 A'});
+  current.service.deleteTrip('trip-a',1);let commandB=prepare(current.service,'trip-b');commandB={...commandB,input:{...commandB.input,name:'档案 B'}};current.service.saveTrip('trip-b',commandB);
+  const earlier=current.archives.getTravelArchive();assert.deepEqual(earlier.trips.map(item=>item.trip.name),['档案 B']);
+  await running.runtime.restore(backup.id);current=running.runtime.current();assert.deepEqual(current.archives.getTravelArchive().trips.map(item=>item.trip.name),['档案 A']);
+  const response=await request(running.url,{path:'/api/archive'});assert.equal(response.status,200);assert.deepEqual(response.json.data.trips.map(item=>item.trip.name),['档案 A']);assert.deepEqual(earlier.trips.map(item=>item.trip.name),['档案 B']);
 });
 
 test('runtime close waits for an active restore and closes the replacement context',async t=>{
