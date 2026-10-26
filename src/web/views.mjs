@@ -33,7 +33,8 @@ export function renderView(root,state,actions) {
     root.append(el('section',{class:'timeline-panel'},el('h2',{},'城市路线'),el('ol',{class:'timeline'},t.cities.map((city,i)=>el('li',{},el('span',{class:'city-number'},String(i+1).padStart(2,'0')),el('div',{},el('h3',{},city.cityName),el('p',{},`${city.arrivalDate} — ${city.departureDate}`),el('span',{class:'muted'},city.provinceName)))))));
     root.append(renderTripExpenseCard(state.expenseOverview,actions));
     if(state.guide)root.append(el('section',{class:'guide-link'},el('div',{},el('h2',{},'由 AI 攻略创建'),el('p',{},state.guide.status==='deleted'?'正式行程已删除，转换时的冻结快照仍保留。':'正式行程保存的是转换时快照；当前攻略可继续独立编辑。')),button('查看当前原攻略',()=>actions.navigate({type:'ai-plan',id:state.guide.planId}),'secondary')));
-    root.append(el('p',{'data-delete-error':'',class:'form-error',hidden:true,role:'alert'}),el('div',{class:'detail-actions'},button('编辑行程',()=>actions.navigate({type:'edit',id:t.id})),button('删除行程',()=>actions.deleteTrip(t),'danger'),button('返回列表',()=>actions.navigate({type:'trips'}),'secondary')));
+    const archive=t.status==='completed'?el('a',{class:'button secondary',href:`#/reports/trips/${t.id}/print`,target:'_blank',rel:'noopener'},'导出行程档案'):el('p',{class:'archive-eligibility'},'行程结束后可生成档案。');
+    root.append(el('p',{'data-delete-error':'',class:'form-error',hidden:true,role:'alert'}),archive,el('div',{class:'detail-actions'},button('编辑行程',()=>actions.navigate({type:'edit',id:t.id})),button('删除行程',()=>actions.deleteTrip(t),'danger'),button('返回列表',()=>actions.navigate({type:'trips'}),'secondary')));
   }
 }
 function empty(actions){return el('section',{class:'empty-state'},el('div',{class:'empty-symbol','aria-hidden':'true'},'＋'),el('h2',{},'还没有行程'),el('p',{},'目的地、日期、路线，从第一趟旅行开始记录。'),button('创建第一趟行程',()=>actions.navigate({type:'new'})));}

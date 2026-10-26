@@ -13,12 +13,16 @@ import {renderFootprintView} from './footprint-views.mjs';
 import {createAmapAdapter} from './amap-adapter.mjs';
 import {createDataController} from './data-controller.mjs';
 import {renderDataView} from './data-views.mjs';
+import {createArchiveController} from './archive-controller.mjs';
+import {renderArchiveView} from './archive-views.mjs';
 import {presentTrip,orderTrips} from '../shared/trip-presenter.mjs';
 const footprintRoutes=new Set(['footprints','footprint-province','footprint-city','footprint-new','footprint-edit','footprint-manage','footprint-settings']);
+const archiveRoutes=new Set(['archive-home','archive-print','trip-archive-print']);
 
 export function navigationSection(route) {
   if(route.type==='home')return 'home';
   if(route.type==='data')return 'data';
+  if(archiveRoutes.has(route.type))return 'archive';
   if(route.type==='trips'||['detail','edit','new','expenses','expense-new','expense-edit','expense-categories'].includes(route.type))return 'trips';
   if(route.type==='footprint-settings')return 'footprint-settings';
   if(footprintRoutes.has(route.type))return 'footprints';
@@ -60,7 +64,7 @@ export function createApp({api,render,navigate,confirm=()=>false,openEditor}) {
 }
 if(typeof document!=='undefined') {
   const root=document.querySelector('#content');const api=createApiClient();
-  let editor=null,aiEditor=null,expenseController=null,dataController=null,activeHash=location.hash,suppressHash=null,navigationQueue=Promise.resolve();
+  let editor=null,aiEditor=null,expenseController=null,dataController=null,archiveController=null,activeHash=location.hash,suppressHash=null,navigationQueue=Promise.resolve();
   const app=createApp({api,render:state=>renderView(root,state,{navigate,deleteTrip:t=>app.deleteTrip(t),retry:r=>app.load(r)}),navigate,confirm:message=>window.confirm(message),openEditor:async route=>{
     const key=route.type==='new'?'new':`edit:${route.id}`;
     let [slot,trip]=await Promise.all([api.draft(key),route.type==='edit'?api.trip(route.id):null]);
@@ -79,7 +83,9 @@ if(typeof document!=='undefined') {
   const footprints=createFootprintRuntime({api,root,navigate,confirm:message=>window.confirm(message)});
   let restoredMessage='';try{restoredMessage=sessionStorage.getItem('data-restore-message')??'';sessionStorage.removeItem('data-restore-message');}catch{}
   const createData=()=>createDataController({api,initialMessage:restoredMessage,render:state=>renderDataView(root,state,dataController),confirm:message=>window.confirm(message),download:url=>{const link=document.createElement('a');link.href=url;link.download='';document.body.append(link);link.click();link.remove();},reload:message=>{try{sessionStorage.setItem('data-restore-message',message);}catch{}location.reload();}});
+  const createArchive=()=>createArchiveController({api,render:state=>renderArchiveView(root,state,{print:()=>archiveController.print(),retry:route=>archiveController.load(route)}),print:()=>window.print()});
   async function loadRoute(route) {
+    document.body.classList.toggle('archive-print-mode',['archive-print','trip-archive-print'].includes(route.type));
     document.querySelectorAll('[data-nav]').forEach(node=>node.classList.toggle('active',node.dataset.nav===navigationSection(route)));
     if(route.type==='ai-plan-edit') {
       renderAiView(root,{type:'ai-loading',route},{});
@@ -90,6 +96,7 @@ if(typeof document!=='undefined') {
         renderAiEditor(root,aiEditor.snapshot(),aiEditor);
       }catch(error){renderAiView(root,{type:'ai-error',route,message:error.message??'加载失败，请重试'},{navigate,retry:loadRoute});}
     } else if(route.type==='data'){dataController=createData();restoredMessage='';await dataController.load();}
+    else if(archiveRoutes.has(route.type)){archiveController=createArchive();await archiveController.load(route);}
     else if(route.type.startsWith('ai-'))await ai.load(route);
     else if(footprintRoutes.has(route.type))await footprints.load(route);
     else if(['expenses','expense-new','expense-edit','expense-categories'].includes(route.type)){expenseController=createExpenses();await expenseController.load(route);}
@@ -103,6 +110,7 @@ if(typeof document!=='undefined') {
       if(aiEditor){if(!await aiEditor.leave()){suppressHash=activeHash;location.hash=activeHash;return;}aiEditor.dispose();aiEditor=null;}
       if(expenseController){expenseController.dispose();expenseController=null;}
       if(dataController){dataController.dispose();dataController=null;}
+      if(archiveController){archiveController.dispose();archiveController=null;}
       footprints.dispose();
       const retainedAiDraft=ai.snapshot().draft;ai.dispose();ai=createAi(retainedAiDraft);activeHash=targetHash;await loadRoute(parseRoute(targetHash));
     }).catch(()=>{});
