@@ -104,9 +104,13 @@ export function createArchivePdfLayout(doc,{fonts}={}) {
     for(let offset=0;offset<range.count;offset++) {
       const index=range.start+offset;doc.switchToPage(index);
       const label=pageLabels[offset]??'旅行档案';
-      doc.font('ArchiveRegular').fontSize(7.5).fillColor(PALETTE.muted).text(label,MARGINS.left,28,{width:contentWidth(),align:'left',lineBreak:false});
-      doc.strokeColor(PALETTE.line).lineWidth(.6).moveTo(MARGINS.left,44).lineTo(MARGINS.left+contentWidth(),44).stroke();
-      doc.font('ArchiveRegular').fontSize(8).fillColor(PALETTE.muted).text(`第 ${offset+1} 页`,MARGINS.left,doc.page.height-36,{width:contentWidth(),align:'center',lineBreak:false});
+      const bottomMargin=doc.page.margins.bottom;
+      doc.page.margins.bottom=0;
+      try {
+        doc.font('ArchiveRegular').fontSize(7.5).fillColor(PALETTE.muted).text(label,MARGINS.left,28,{width:contentWidth(),align:'left',lineBreak:false});
+        doc.strokeColor(PALETTE.line).lineWidth(.6).moveTo(MARGINS.left,44).lineTo(MARGINS.left+contentWidth(),44).stroke();
+        doc.font('ArchiveRegular').fontSize(8).fillColor(PALETTE.muted).text(`第 ${offset+1} 页`,MARGINS.left,doc.page.height-36,{width:contentWidth(),align:'center',lineBreak:false});
+      } finally {doc.page.margins.bottom=bottomMargin;}
     }
   }
   return {addPage,ensureSpace,title,heading,paragraph,facts,list,source,expenseTable,finalize};

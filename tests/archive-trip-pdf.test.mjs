@@ -27,6 +27,20 @@ class RecordingDocument {
   link(...args) {this.calls.push(['link',...args]);return this;}
 }
 
+class AutoPagingDocument extends RecordingDocument {
+  text(value,x,top,options={}) {
+    if(typeof x==='object'){options=x;x=undefined;top=undefined;}else if(typeof top==='object'){options=top;top=undefined;}
+    const y=typeof top==='number'?top:this.y;
+    const height=this.heightOfString(value,options);
+    if(this.page&&y+height>this.page.height-this.page.margins.bottom) {
+      this.calls.push(['automaticPageBreak',String(value)]);
+      this.addPage({size:'A4',layout:'portrait',margins:{...this.page.margins}});
+      return super.text(value,x,this.y,options);
+    }
+    return super.text(value,x,y,options);
+  }
+}
+
 function report({empty=false,long=false,expenseCount=2}={}) {
   const items=Array.from({length:expenseCount},(_,index)=>({spentDate:`2026-10-${String(10+(index%4)).padStart(2,'0')}`,categoryName:index%2?'餐饮':'交通',cityName:'南京市',cityState:'current',amountCents:1880+index,note:long?`第 ${index+1} 笔 ${'很长的中文备注'.repeat(30)}`:`第 ${index+1} 笔`}));
   const plan=label=>({trip:{name:label,startDate:'2026-10-10',endDate:'2026-10-13',travelerCount:2,budgetCents:320050,cities:[{cityCode:'320100',cityName:'南京市',provinceName:'江苏省',arrivalDate:'2026-10-10',departureDate:'2026-10-13'}]},days:[{date:'2026-10-10',activities:[{cityCode:'320100',title:`${label}活动`,description:'参观博物馆并沿城墙散步',sourceIds:['s1']}]}],cautions:[`${label}注意事项`]});
@@ -47,6 +61,15 @@ test('layout uses A4 margins registered Chinese fonts warm palette and numbered 
   assert.equal(page.size,'A4');assert.equal(page.layout,'portrait');assert.deepEqual(page.margins,{top:58,right:54,bottom:58,left:54});
   assert.ok(doc.calls.some(call=>call[0]==='fillColor'&&call[1]==='#9A4F3D'));
   assert.ok(doc.calls.some(call=>call[0]==='text'&&call[1]==='第 1 页'));
+});
+
+test('finalizing headers and footers does not create footer-only pages',()=>{
+  const doc=new AutoPagingDocument(),layout=createArchivePdfLayout(doc,{fonts:{regular:'regular.ttc',bold:'bold.ttc'}});
+  layout.addPage('第一页');layout.addPage('第二页');
+  const before=doc.pages.length;
+  layout.finalize();
+  assert.equal(doc.pages.length,before);
+  assert.equal(doc.calls.filter(call=>call[0]==='automaticPageBreak').length,0);
 });
 
 test('space guard starts a new page before an indivisible block',()=>{

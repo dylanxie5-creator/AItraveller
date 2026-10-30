@@ -1,5 +1,7 @@
 # 网页旅行档案 PDF 验收记录
 
+> 历史记录：本文验收的是已移除的浏览器打印预览方案。2026-10-30 起，现行功能改为服务端直接生成并下载 PDF；请以[直接 PDF 下载验收记录](direct-pdf-acceptance.md)为准。
+
 验收日期：2026-10-26
 
 分支：`codex/web-travel-archive-pdf`
