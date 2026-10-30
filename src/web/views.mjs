@@ -1,11 +1,6 @@
 import {renderHomeExpenseCard,renderTripExpenseCard} from './expense-views.mjs';
-
-export function el(tag,attributes={},...children) {
-  const node=document.createElement(tag);
-  for(const [key,value] of Object.entries(attributes)) {if(key.startsWith('on'))node.addEventListener(key.slice(2).toLowerCase(),value);else if(key==='class')node.className=value;else if(value!==false&&value!==null&&value!==undefined)node.setAttribute(key,String(value));}
-  for(const child of children.flat(Infinity)){if(child!==undefined&&child!==null)node.append(child instanceof Node?child:document.createTextNode(String(child)));}return node;
-}
-export const button=(text,action,kind='primary')=>el('button',{type:'button',class:`button ${kind}`,onClick:action},text);
+import {el,button} from './ui-elements.mjs';
+export {el,button} from './ui-elements.mjs';
 export function homeFootprintSummary(data) {const value=data?.footprints??{};const provinceCount=Number.isSafeInteger(value.provinceCount)?value.provinceCount:0,cityCount=Number.isSafeInteger(value.cityCount)?value.cityCount:0,visitCount=Number.isSafeInteger(value.visitCount)?value.visitCount:0;return {provinceCount,cityCount,visitCount,empty:visitCount===0,route:{type:'footprints'}};}
 export function tripCard(trip,actions) {return el('button',{class:'trip-card',type:'button',onClick:()=>actions.navigate({type:'detail',id:trip.id})},el('span',{class:`badge ${trip.status}`},trip.statusLabel),el('h3',{},trip.name),el('p',{class:'route-text'},trip.routeText),el('div',{class:'trip-meta'},el('span',{},`${trip.startDate} — ${trip.endDate}`),el('span',{},`${trip.travelerCount} 人 · ${trip.budgetText}`)));}
 export function renderView(root,state,actions) {
