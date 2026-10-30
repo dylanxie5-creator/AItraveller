@@ -9,7 +9,7 @@ test('local startup serves all browser modules but not private project files',as
   const running=await startServer({dbPath:path,port:0});
   try {
     assert.equal(running.server.address().address,'127.0.0.1');
-    for(const route of ['/',...['styles.css','footprint-styles.css','archive-styles.css','app.mjs','api-client.mjs','router.mjs','views.mjs','ui-elements.mjs','form-controller.mjs','expense-controller.mjs','expense-views.mjs','footprint-controller.mjs','footprint-views.mjs','data-controller.mjs','data-views.mjs','archive-controller.mjs','archive-views.mjs','amap-adapter.mjs','favicon.svg','icons.svg','travel-wash.png'].map(f=>'/web/'+f),...['date.mjs','money.mjs','trip-validation.mjs','trip-form-model.mjs','expense-form-model.mjs','footprint-form-model.mjs','footprint-format.mjs','trip-presenter.mjs'].map(f=>'/shared/'+f)]) {
+    for(const route of ['/',...['styles.css','footprint-styles.css','archive-styles.css','app.mjs','ui-runtime.mjs','api-client.mjs','router.mjs','views.mjs','ui-elements.mjs','form-controller.mjs','expense-controller.mjs','expense-views.mjs','footprint-controller.mjs','footprint-views.mjs','data-controller.mjs','data-views.mjs','archive-controller.mjs','archive-views.mjs','amap-adapter.mjs','favicon.svg','icons.svg','travel-wash.png'].map(f=>'/web/'+f),...['date.mjs','money.mjs','trip-validation.mjs','trip-form-model.mjs','expense-form-model.mjs','footprint-form-model.mjs','footprint-format.mjs','trip-presenter.mjs'].map(f=>'/shared/'+f)]) {
       const response=await request(running.url,{path:route});assert.equal(response.status,200,route);assert.ok(response.text.length>0,route);
     }
     assert.match((await request(running.url,{path:'/web/ui-elements.mjs'})).headers['content-type'],/^text\/javascript/);

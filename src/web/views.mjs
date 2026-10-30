@@ -5,7 +5,7 @@ export function homeFootprintSummary(data) {const value=data?.footprints??{};con
 export function tripCard(trip,actions) {return el('button',{class:'trip-card',type:'button',onClick:()=>actions.navigate({type:'detail',id:trip.id})},el('span',{class:`badge ${trip.status}`},trip.statusLabel),el('h3',{},trip.name),el('p',{class:'route-text'},trip.routeText),el('div',{class:'trip-meta'},el('span',{},`${trip.startDate} — ${trip.endDate}`),el('span',{},`${trip.travelerCount} 人 · ${trip.budgetText}`)));}
 export function renderView(root,state,actions) {
   if(state.type==='delete-error'){const box=root.querySelector('[data-delete-error]');if(box){box.textContent=state.message;box.hidden=false;}return;}
-  root.replaceChildren();document.querySelectorAll('[data-nav]').forEach(n=>n.classList.toggle('active',n.dataset.nav===(state.type==='home'?'home':'trips')));
+  root.replaceChildren();
   if(state.type==='loading'){root.append(el('p',{class:'loading',role:'status'},'正在载入行程…'));return;}
   if(state.type==='error'){root.append(el('section',{class:'empty-state'},el('h1',{},state.code==='NOT_FOUND'?'行程已不存在':'暂时无法载入'),el('p',{role:'alert'},state.message),button('重新载入',()=>actions.retry(state.route)),button('返回行程',()=>actions.navigate({type:'trips'}),'secondary')));return;}
   if(state.type==='editor'){root.append(el('p',{class:'loading'},'编辑器正在准备…'));return;}

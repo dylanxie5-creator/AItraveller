@@ -15,6 +15,7 @@ import {createDataController} from './data-controller.mjs';
 import {renderDataView} from './data-views.mjs';
 import {createArchiveController} from './archive-controller.mjs';
 import {renderArchiveView} from './archive-views.mjs';
+import {createUiRuntime} from './ui-runtime.mjs';
 import {presentTrip,orderTrips} from '../shared/trip-presenter.mjs';
 const footprintRoutes=new Set(['footprints','footprint-province','footprint-city','footprint-new','footprint-edit','footprint-manage','footprint-settings']);
 const archiveRoutes=new Set(['archive-home','archive-print','trip-archive-print']);
@@ -63,9 +64,12 @@ export function createApp({api,render,navigate,confirm=()=>false,openEditor}) {
   }};
 }
 if(typeof document!=='undefined') {
-  const root=document.querySelector('#content');const api=createApiClient();
+  const root=document.querySelector('#content');const api=createApiClient();let currentRoute=parseRoute(location.hash);
+  const uiRuntime=createUiRuntime({document,window,root});
+  const refreshUi=()=>uiRuntime.refresh(navigationSection(currentRoute));
+  const paint=callback=>{callback();refreshUi();};
   let editor=null,aiEditor=null,expenseController=null,dataController=null,archiveController=null,activeHash=location.hash,suppressHash=null,navigationQueue=Promise.resolve();
-  const app=createApp({api,render:state=>renderView(root,state,{navigate,deleteTrip:t=>app.deleteTrip(t),retry:r=>app.load(r)}),navigate,confirm:message=>window.confirm(message),openEditor:async route=>{
+  const app=createApp({api,render:state=>paint(()=>renderView(root,state,{navigate,deleteTrip:t=>app.deleteTrip(t),retry:r=>app.load(r)})),navigate,confirm:message=>window.confirm(message),openEditor:async route=>{
     const key=route.type==='new'?'new':`edit:${route.id}`;
     let [slot,trip]=await Promise.all([api.draft(key),route.type==='edit'?api.trip(route.id):null]);
     if(JSON.stringify(parseRoute(location.hash))!==JSON.stringify(route))return;
@@ -73,28 +77,28 @@ if(typeof document!=='undefined') {
       if(window.confirm('确认舍弃这份未完成的草稿？'))slot=await api.discardDraft(key,{sessionId:slot.sessionId,revision:slot.revision});
     }
     const model=createTripForm({trip,slot:slot.state==='active'?slot:null});
-    editor=createFormController({api,model,draftKey:key,slot,render:(state,options)=>renderForm(root,state,editor,api,options),navigate,confirm:message=>window.confirm(message)});
+    editor=createFormController({api,model,draftKey:key,slot,render:(state,options)=>paint(()=>renderForm(root,state,editor,api,options)),navigate,confirm:message=>window.confirm(message)});
     await editor.start();
   }});
   let ai;
-  const createAi=initialDraft=>createAiController({api,render:state=>renderAiView(root,state,{navigate,retry:r=>ai.load(r),submit:values=>ai.submit(values),retrySubmit:()=>ai.retrySubmit(),saveSettings:command=>ai.saveSettings(command),convert:plan=>ai.convert(plan),reuseJob:job=>ai.reuseJob(job)}),navigate,confirm:message=>window.confirm(message),initialDraft});
+  const createAi=initialDraft=>createAiController({api,render:state=>paint(()=>renderAiView(root,state,{navigate,retry:r=>ai.load(r),submit:values=>ai.submit(values),retrySubmit:()=>ai.retrySubmit(),saveSettings:command=>ai.saveSettings(command),convert:plan=>ai.convert(plan),reuseJob:job=>ai.reuseJob(job)})),navigate,confirm:message=>window.confirm(message),initialDraft});
   ai=createAi();
-  const createExpenses=()=>createExpenseController({api,render:state=>renderExpenseView(root,state,{controller:expenseController,navigate,deleteExpense:item=>expenseController.deleteExpense(item),saveCategory:command=>expenseController.saveCategory(command),deleteCategory:category=>expenseController.deleteCategory(category),retry:route=>expenseController.load(route)}),navigate,confirm:message=>window.confirm(message)});
-  const footprints=createFootprintRuntime({api,root,navigate,confirm:message=>window.confirm(message)});
+  const createExpenses=()=>createExpenseController({api,render:state=>paint(()=>renderExpenseView(root,state,{controller:expenseController,navigate,deleteExpense:item=>expenseController.deleteExpense(item),saveCategory:command=>expenseController.saveCategory(command),deleteCategory:category=>expenseController.deleteCategory(category),retry:route=>expenseController.load(route)})),navigate,confirm:message=>window.confirm(message)});
+  const footprints=createFootprintRuntime({api,root,navigate,confirm:message=>window.confirm(message),render:(target,state,actions)=>paint(()=>renderFootprintView(target,state,actions))});
   let restoredMessage='';try{restoredMessage=sessionStorage.getItem('data-restore-message')??'';sessionStorage.removeItem('data-restore-message');}catch{}
-  const createData=()=>createDataController({api,initialMessage:restoredMessage,render:state=>renderDataView(root,state,dataController),confirm:message=>window.confirm(message),download:url=>{const link=document.createElement('a');link.href=url;link.download='';document.body.append(link);link.click();link.remove();},reload:message=>{try{sessionStorage.setItem('data-restore-message',message);}catch{}location.reload();}});
-  const createArchive=()=>createArchiveController({api,render:state=>renderArchiveView(root,state,{print:()=>archiveController.print(),retry:route=>archiveController.load(route)}),print:()=>window.print()});
+  const createData=()=>createDataController({api,initialMessage:restoredMessage,render:state=>paint(()=>renderDataView(root,state,dataController)),confirm:message=>window.confirm(message),download:url=>{const link=document.createElement('a');link.href=url;link.download='';document.body.append(link);link.click();link.remove();},reload:message=>{try{sessionStorage.setItem('data-restore-message',message);}catch{}location.reload();}});
+  const createArchive=()=>createArchiveController({api,render:state=>paint(()=>renderArchiveView(root,state,{print:()=>archiveController.print(),retry:route=>archiveController.load(route)})),print:()=>window.print()});
   async function loadRoute(route) {
+    currentRoute=route;
     document.body.classList.toggle('archive-print-mode',['archive-print','trip-archive-print'].includes(route.type));
-    document.querySelectorAll('[data-nav]').forEach(node=>node.classList.toggle('active',node.dataset.nav===navigationSection(route)));
     if(route.type==='ai-plan-edit') {
-      renderAiView(root,{type:'ai-loading',route},{});
+      paint(()=>renderAiView(root,{type:'ai-loading',route},{}));
       try {
         const plan=await api.aiPlan(route.id);
         if(JSON.stringify(parseRoute(location.hash))!==JSON.stringify(route))return;
-        aiEditor=createAiPlanEditor({api,plan,render:(state,options)=>renderAiEditor(root,state,aiEditor,options),navigate,confirm:message=>window.confirm(message)});
-        renderAiEditor(root,aiEditor.snapshot(),aiEditor);
-      }catch(error){renderAiView(root,{type:'ai-error',route,message:error.message??'加载失败，请重试'},{navigate,retry:loadRoute});}
+        aiEditor=createAiPlanEditor({api,plan,render:(state,options)=>paint(()=>renderAiEditor(root,state,aiEditor,options)),navigate,confirm:message=>window.confirm(message)});
+        paint(()=>renderAiEditor(root,aiEditor.snapshot(),aiEditor));
+      }catch(error){paint(()=>renderAiView(root,{type:'ai-error',route,message:error.message??'加载失败，请重试'},{navigate,retry:loadRoute}));}
     } else if(route.type==='data'){dataController=createData();restoredMessage='';await dataController.load();}
     else if(archiveRoutes.has(route.type)){archiveController=createArchive();await archiveController.load(route);}
     else if(route.type.startsWith('ai-'))await ai.load(route);
@@ -116,5 +120,6 @@ if(typeof document!=='undefined') {
     }).catch(()=>{});
   });
   window.addEventListener('beforeunload',event=>{if(hasPendingWrites([editor?.snapshot(),aiEditor?.snapshot(),expenseController?.snapshot(),dataController?.snapshot(),footprints.snapshot()])){event.preventDefault();event.returnValue='';}});
+  window.addEventListener('pagehide',()=>uiRuntime.dispose(),{once:true});
   loadRoute(parseRoute(location.hash));
 }

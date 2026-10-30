@@ -6,6 +6,7 @@ import {createApiClient} from '../src/web/api-client.mjs';
 import {homeFootprintSummary} from '../src/web/views.mjs';
 import {presentTrip} from '../src/domain/trip-presenter.mjs';
 import {setup,prepare} from './helpers/database.mjs';
+import {readFileSync} from 'node:fs';
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 test('navigation parses only known routes and safely decodes trip ids',()=>{
   assert.deepEqual(parseRoute('#/trips/trip-1/edit'),{type:'edit',id:'trip-1'});assert.deepEqual(parseRoute('#/new'),{type:'new'});assert.deepEqual(parseRoute('#/data'),{type:'data'});assert.equal(routeToHash({type:'data'}),'#/data');assert.deepEqual(parseRoute('#/bad'),{type:'home'});
@@ -81,4 +82,13 @@ test('API client preserves error status and sends versioned delete JSON',async()
 });
 test('presenter derives Chinese status and precise budget',t=>{
   const {service}=setup(t);const trip=service.saveTrip('trip-1',prepare(service));const view=presentTrip(trip,'2026-10-02');assert.equal(view.statusLabel,'待出发');assert.equal(view.budgetText,'¥3,200.50');assert.equal(view.routeText,'南京市 · 苏州市');
+});
+
+test('mobile shell keeps four primary destinations and moves secondary tools into More',()=>{
+  const html=readFileSync(new URL('../src/web/index.html',import.meta.url),'utf8');
+  const destinations=[...html.matchAll(/data-mobile-destination="([^"]+)"/g)].map(match=>match[1]);
+  assert.deepEqual(destinations,['home','trips','footprints','more']);
+  const drawer=html.match(/<section[^>]*data-more-drawer[^>]*>([\s\S]*?)<\/section>/)?.[1]??'';
+  for(const hash of ['#/archive','#/ai/plans','#/footprints/settings','#/ai/settings','#/data'])assert.match(drawer,new RegExp(`href="${hash.replace('/','\\/')}"`));
+  assert.doesNotMatch(html,/data-nav="expenses"|data-mobile-destination="expenses"/);
 });
