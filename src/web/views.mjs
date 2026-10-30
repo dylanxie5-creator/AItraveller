@@ -1,5 +1,5 @@
 import {renderHomeExpenseCard,renderTripExpenseCard} from './expense-views.mjs';
-import {actionGroup,button,el,fieldMessage,stepper} from './ui-elements.mjs';
+import {actionGroup,button,el,fieldMessage,pageHeader,statusBadge,stepper} from './ui-elements.mjs';
 export {el,button} from './ui-elements.mjs';
 export function homeFootprintSummary(data) {const value=data?.footprints??{};const provinceCount=Number.isSafeInteger(value.provinceCount)?value.provinceCount:0,cityCount=Number.isSafeInteger(value.cityCount)?value.cityCount:0,visitCount=Number.isSafeInteger(value.visitCount)?value.visitCount:0;return {provinceCount,cityCount,visitCount,empty:visitCount===0,route:{type:'footprints'}};}
 export function tripCard(trip,actions) {return el('button',{class:'trip-card',type:'button',onClick:()=>actions.navigate({type:'detail',id:trip.id})},el('span',{class:`badge ${trip.status}`},trip.statusLabel),el('h3',{},trip.name),el('p',{class:'route-text'},trip.routeText),el('div',{class:'trip-meta'},el('span',{},`${trip.startDate} — ${trip.endDate}`),el('span',{},`${trip.travelerCount} 人 · ${trip.budgetText}`)));}
@@ -10,26 +10,26 @@ export function renderView(root,state,actions) {
   if(state.type==='error'){root.append(el('section',{class:'empty-state'},el('h1',{},state.code==='NOT_FOUND'?'行程已不存在':'暂时无法载入'),el('p',{role:'alert'},state.message),button('重新载入',()=>actions.retry(state.route)),button('返回行程',()=>actions.navigate({type:'trips'}),'secondary')));return;}
   if(state.type==='editor'){root.append(el('p',{class:'loading'},'编辑器正在准备…'));return;}
   const home=state.type==='home';
-  root.append(el('header',{class:'page-header'},el('div',{},el('p',{class:'eyebrow'},home?'TRAVEL JOURNAL':state.type==='detail'?'YOUR ITINERARY':'MY TRIPS'),el('h1',{},home?'旅行概览':state.type==='detail'?state.trip.name:'我的行程')),button('＋ 新建行程',()=>actions.navigate({type:'new'}))));
+  root.append(pageHeader({eyebrow:home?'TRAVEL JOURNAL':state.type==='detail'?'YOUR ITINERARY':'MY TRIPS',title:home?'旅行概览':state.type==='detail'?state.trip.name:'我的行程',primaryAction:button('＋ 新建行程',()=>actions.navigate({type:'new'}))}));
   if(home){
     const counts=state.data.counts;
-    root.append(el('div',{class:'stats'},...[[counts.total,'全部行程'],[counts.upcoming,'待出发'],[counts.ongoing,'进行中'],[counts.completed,'已结束']].map(([value,label])=>el('section',{class:'stat'},el('span',{class:'stat-value'},value),el('span',{class:'stat-label'},label)))));
+    root.append(el('section',{class:'journal-section journey-overview','aria-label':'行程概况'},el('div',{class:'journal-summary-line'},...[[counts.total,'全部行程'],[counts.upcoming,'待出发'],[counts.ongoing,'进行中'],[counts.completed,'已结束']].map(([value,label])=>el('span',{},el('strong',{},value),label)))));
     root.append(renderHomeExpenseCard(state.data.expenses,actions));
     const footprints=homeFootprintSummary(state.data);
-    root.append(el('section',{class:'home-footprint-card'},el('div',{},el('p',{class:'eyebrow'},'CHINA FOOTPRINTS'),el('h2',{},footprints.empty?'还没有点亮城市':'你的中国足迹'),el('p',{},footprints.empty?'完成行程或手动补录后，这里会点亮你的旅行地图。':`${footprints.provinceCount} 个省级地区 · ${footprints.cityCount} 座城市 · ${footprints.visitCount} 次到访`)),button(footprints.empty?'去记录第一处足迹':'查看足迹地图',()=>actions.navigate(footprints.route),'secondary')));
-    root.append(el('div',{class:'section-heading'},el('h2',{},'最近一趟旅行'),button('查看全部',()=>actions.navigate({type:'trips'}),'text')));
-    root.append(state.trip?tripCard(state.trip,actions):empty(actions));
+    root.append(el('section',{'data-journal-role':'footprint-band',class:'journal-section journal-band home-footprint-card'},el('div',{},el('p',{class:'eyebrow'},'CHINA FOOTPRINTS'),el('h2',{},footprints.empty?'还没有点亮城市':'你的中国足迹'),el('p',{class:'footprint-counts'},el('span',{},el('strong',{'data-counter':''},footprints.provinceCount),' 个省级地区'),el('span',{},el('strong',{'data-counter':''},footprints.cityCount),' 座城市'),el('span',{},el('strong',{'data-counter':''},footprints.visitCount),' 次到访')),footprints.empty?el('p',{},'完成行程或手动补录后，这里会点亮你的旅行地图。'):null),button(footprints.empty?'去记录第一处足迹':'查看足迹地图',()=>actions.navigate(footprints.route),'secondary')));
+    root.append(el('section',{'data-journal-role':'latest-trip','data-spotlight':'',class:'journal-section latest-trip-narrative'},el('div',{class:'section-heading'},el('h2',{},'最近一趟旅行'),button('查看全部',()=>actions.navigate({type:'trips'}),'text')),state.trip?tripCard(state.trip,actions):empty(actions)));
     root.append(el('section',{class:'local-note'},el('span',{class:'note-symbol'},'◇'),el('div',{},el('h3',{},'属于你的旅行手账'),el('p',{},'先把时间和路线安排好。行程保存在这台电脑上，关闭网页后仍可继续。'))));
   }else if(state.type==='trips'){
     if(!state.trips.length){root.append(empty(actions));return;}
-    for(const [status,label] of [['ongoing','进行中'],['upcoming','待出发'],['completed','已结束']]){const rows=state.trips.filter(t=>t.status===status);if(rows.length)root.append(el('section',{class:'trip-group'},el('h2',{},`${label} · ${rows.length}`),el('div',{class:'trip-grid'},rows.map(t=>tripCard(t,actions)))));}
+    for(const [status,label] of [['ongoing','进行中'],['upcoming','待出发'],['completed','已结束']]){const rows=state.trips.filter(t=>t.status===status);if(rows.length)root.append(el('section',{class:'trip-group journal-section'},el('h2',{},`${label} · ${rows.length}`),el('div',{class:'trip-list'},rows.map(t=>tripCard(t,actions)))));}
   }else{
-    const t=state.trip;root.append(el('section',{class:'detail-summary'},el('span',{class:`badge ${t.status}`},t.statusLabel),el('p',{class:'detail-date'},`${t.startDate} — ${t.endDate}`),el('div',{class:'detail-facts'},el('span',{},`${t.travelerCount} 人出行`),el('span',{},`预算 ${t.budgetText}`))));
-    root.append(el('section',{class:'timeline-panel'},el('h2',{},'城市路线'),el('ol',{class:'timeline'},t.cities.map((city,i)=>el('li',{},el('span',{class:'city-number'},String(i+1).padStart(2,'0')),el('div',{},el('h3',{},city.cityName),el('p',{},`${city.arrivalDate} — ${city.departureDate}`),el('span',{class:'muted'},city.provinceName)))))));
+    const t=state.trip;root.append(el('section',{'data-spotlight':'',class:'detail-summary journal-section'},statusBadge(t.statusLabel,t.status),el('p',{class:'detail-date'},`${t.startDate} — ${t.endDate}`),el('div',{class:'detail-facts'},el('span',{},`${t.travelerCount} 人出行`),el('span',{},`预算 ${t.budgetText}`))));
+    root.append(el('section',{class:'timeline-panel journal-section'},el('h2',{},'城市路线'),el('ol',{class:'timeline'},t.cities.map((city,i)=>el('li',{},el('span',{class:'city-number'},String(i+1).padStart(2,'0')),el('div',{},el('h3',{},city.cityName),el('p',{},`${city.arrivalDate} — ${city.departureDate}`),el('span',{class:'muted'},city.provinceName)))))));
     root.append(renderTripExpenseCard(state.expenseOverview,actions));
     if(state.guide)root.append(el('section',{class:'guide-link'},el('div',{},el('h2',{},'由 AI 攻略创建'),el('p',{},state.guide.status==='deleted'?'正式行程已删除，转换时的冻结快照仍保留。':'正式行程保存的是转换时快照；当前攻略可继续独立编辑。')),button('查看当前原攻略',()=>actions.navigate({type:'ai-plan',id:state.guide.planId}),'secondary')));
-    const archive=t.status==='completed'?el('a',{class:'button secondary',href:`#/reports/trips/${t.id}/print`,target:'_blank',rel:'noopener'},'导出行程档案'):el('p',{class:'archive-eligibility'},'行程结束后可生成档案。');
-    root.append(el('p',{'data-delete-error':'',class:'form-error',hidden:true,role:'alert'}),archive,el('div',{class:'detail-actions'},button('编辑行程',()=>actions.navigate({type:'edit',id:t.id})),button('删除行程',()=>actions.deleteTrip(t),'danger'),button('返回列表',()=>actions.navigate({type:'trips'}),'secondary')));
+    const archive=t.status==='completed'?el('a',{class:'button secondary',href:`#/reports/trips/${t.id}/print`,target:'_blank',rel:'noopener'},'导出行程档案'):null;
+    root.append(el('p',{'data-delete-error':'',class:'form-error',hidden:true,role:'alert'}),t.status!=='completed'?el('p',{class:'archive-eligibility'},'行程结束后可生成档案。'):null,actionGroup(archive,button('编辑行程',()=>actions.navigate({type:'edit',id:t.id}),'secondary'),button('删除行程',()=>actions.deleteTrip(t),'danger'),button('返回列表',()=>actions.navigate({type:'trips'}),'text')));
+    const detailActions=root.children[root.children.length-1];detailActions.setAttribute('data-detail-actions','');detailActions.className+=' detail-actions';
   }
 }
 function empty(actions){return el('section',{class:'empty-state'},el('div',{class:'empty-symbol','aria-hidden':'true'},'＋'),el('h2',{},'还没有行程'),el('p',{},'目的地、日期、路线，从第一趟旅行开始记录。'),button('创建第一趟行程',()=>actions.navigate({type:'new'})));}

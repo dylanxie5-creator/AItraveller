@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createApp,createFootprintRuntime,hasPendingWrites,navigationSection} from '../src/web/app.mjs';
 import {parseRoute,routeToHash} from '../src/web/router.mjs';
 import {createApiClient} from '../src/web/api-client.mjs';
-import {homeFootprintSummary} from '../src/web/views.mjs';
+import {homeFootprintSummary,renderView} from '../src/web/views.mjs';
 import {presentTrip} from '../src/domain/trip-presenter.mjs';
 import {setup,prepare} from './helpers/database.mjs';
 import {readFileSync} from 'node:fs';
@@ -91,4 +91,20 @@ test('mobile shell keeps four primary destinations and moves secondary tools int
   const drawer=html.match(/<section[^>]*data-more-drawer[^>]*>([\s\S]*?)<\/section>/)?.[1]??'';
   for(const hash of ['#/archive','#/ai/plans','#/footprints/settings','#/ai/settings','#/data'])assert.match(drawer,new RegExp(`href="${hash.replace('/','\\/')}"`));
   assert.doesNotMatch(html,/data-nav="expenses"|data-mobile-destination="expenses"/);
+});
+
+class JournalNode {constructor(tag='',text=''){this.tag=tag;this.text=text;this.children=[];this.attrs={};this.className='';}setAttribute(key,value){this.attrs[key]=String(value);if(key==='class')this.className=String(value);}addEventListener(){}append(...items){for(const item of items.flat(Infinity))this.children.push(item instanceof JournalNode?item:new JournalNode('#text',String(item)));}replaceChildren(...items){this.children=[];this.append(...items);}querySelector(){return null;}}
+const journalNodes=root=>{const rows=[];(function walk(node){rows.push(node);for(const child of node.children)walk(child);})(root);return rows;};
+const journalText=root=>journalNodes(root).filter(node=>node.tag==='#text').map(node=>node.text).join(' ');
+const textWithin=node=>journalText(node).replace(/\s+/g,' ').trim();
+test('home and detail use one narrative hierarchy with ordered trip actions',()=>{
+  const priorNode=globalThis.Node,priorDocument=globalThis.document;globalThis.Node=JournalNode;globalThis.document={createElement:tag=>new JournalNode(tag),createTextNode:text=>new JournalNode('#text',String(text))};
+  try{
+    const actions={navigate(){},deleteTrip(){},retry(){}},trip={id:'trip-1',name:'江南长标题旅行',status:'completed',statusLabel:'已结束',startDate:'2026-10-10',endDate:'2026-10-13',travelerCount:2,budgetText:'¥3,200.50',routeText:'南京市 · 苏州市',cities:[]};
+    const home=new JournalNode('main');renderView(home,{type:'home',data:{counts:{total:1,upcoming:0,ongoing:0,completed:1},expenses:{hasExpenses:true,totalCents:12000},footprints:{provinceCount:2,cityCount:3,visitCount:4}},trip},actions);const homeNodes=journalNodes(home);
+    assert.equal(homeNodes.filter(node=>node.tag==='button'&&node.className.includes('primary')&&textWithin(node).includes('新建行程')).length,1);assert.equal(homeNodes.filter(node=>node.attrs['data-journal-role']==='latest-trip').length,1);assert.equal(homeNodes.filter(node=>node.attrs['data-journal-role']==='footprint-band').length,1);assert.equal(homeNodes.filter(node=>node.attrs['data-journal-role']==='expense-band').length,1);
+    for(const value of ['2','3','4'])assert.ok(homeNodes.some(node=>node.attrs['data-counter']===''&&textWithin(node)===value));
+    const empty=new JournalNode('main');renderView(empty,{type:'home',data:{counts:{total:0,upcoming:0,ongoing:0,completed:0},expenses:{hasExpenses:false,totalCents:0},footprints:{provinceCount:0,cityCount:0,visitCount:0}},trip:null},actions);assert.doesNotMatch(journalText(empty),/示例|北京|上海/);
+    const detail=new JournalNode('main');renderView(detail,{type:'detail',trip,guide:null,expenseOverview:{trip,summary:{hasExpenses:false,totalCents:0,budgetCents:320050,budgetRemainingCents:320050,budgetState:'within',recentExpenses:[]}}},actions);const group=journalNodes(detail).find(node=>node.attrs['data-detail-actions']==='');assert.ok(group);assert.deepEqual(group.children.map(textWithin),['导出行程档案','编辑行程','删除行程','返回列表']);const danger=group.children.find(node=>textWithin(node)==='删除行程');assert.match(danger.className,/danger/);assert.doesNotMatch(danger.className,/primary/);
+  }finally{globalThis.Node=priorNode;globalThis.document=priorDocument;}
 });

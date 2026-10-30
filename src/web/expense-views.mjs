@@ -1,12 +1,5 @@
 import {formatCents} from '../shared/money.mjs';
-
-function el(tag,attributes={},...children) {
-  const node=document.createElement(tag);
-  for(const [key,value] of Object.entries(attributes)){if(key.startsWith('on'))node.addEventListener(key.slice(2).toLowerCase(),value);else if(key==='class')node.className=value;else if(value!==false&&value!==null&&value!==undefined)node.setAttribute(key,String(value));}
-  for(const child of children.flat(Infinity))if(child!==undefined&&child!==null)node.append(child instanceof Node?child:document.createTextNode(String(child)));
-  return node;
-}
-const button=(text,action,kind='primary')=>el('button',{type:'button',class:`button ${kind}`,onClick:action},text);
+import {actionGroup,button,el,pageHeader} from './ui-elements.mjs';
 const money=cents=>`¥${formatCents(cents)}`;
 
 function expenseRow(item,actions={}) {
@@ -15,26 +8,26 @@ function expenseRow(item,actions={}) {
 }
 
 export function renderHomeExpenseCard(overview,actions) {
-  return el('section',{class:'home-expense-card'},el('div',{},el('p',{class:'eyebrow'},'TRIP EXPENSES'),el('h2',{},'旅行花销'),el('p',{},overview?.hasExpenses?'所有行程已记录花销':'尚无记录')),el('strong',{class:'home-expense-total'},overview?.hasExpenses?money(overview.totalCents):'—'),overview?.hasExpenses?button('从行程查看明细',()=>actions.navigate({type:'trips'}),'secondary'):null);
+  return el('section',{'data-journal-role':'expense-band',class:'home-expense-card journal-section journal-band'},el('div',{},el('p',{class:'eyebrow'},'TRIP EXPENSES'),el('h2',{},'旅行花销'),el('p',{},overview?.hasExpenses?'所有行程已记录花销':'尚无记录')),el('strong',{class:'home-expense-total'},overview?.hasExpenses?money(overview.totalCents):'—'),overview?.hasExpenses?button('从行程查看明细',()=>actions.navigate({type:'trips'}),'secondary'):null);
 }
 
 export function renderTripExpenseCard(overview,actions) {
   const {summary}=overview;
   const budget=summary.budgetState==='unset'?'未设置预算':summary.budgetState==='over'?`${money(summary.budgetRemainingCents)} · 已超预算`: `剩余 ${money(summary.budgetRemainingCents)}`;
-  return el('section',{class:'trip-expense-card'},el('div',{class:'section-heading'},el('div',{},el('p',{class:'eyebrow'},'EXPENSES'),el('h2',{},'这趟行程的花销')),button(summary.hasExpenses?'查看全部':'记录第一笔',()=>actions.navigate({type:summary.hasExpenses?'expenses':'expense-new',id:overview.trip.id}),summary.hasExpenses?'secondary':'primary')),el('div',{class:'expense-card-facts'},el('div',{},el('span',{},'累计'),el('strong',{},summary.hasExpenses?money(summary.totalCents):'—')),el('div',{},el('span',{},'预算状态'),el('strong',{class:summary.budgetState==='over'?'over-budget':''},summary.hasExpenses||summary.budgetState!=='unset'?budget:'未设置预算'))),summary.hasExpenses?el('div',{class:'recent-expenses'},summary.recentExpenses.map(item=>expenseRow(item))):el('p',{class:'muted'},'尚无记录。金额、分类、城市和日期会保存在这趟行程中。'));
+  return el('section',{class:'trip-expense-card journal-section'},el('div',{class:'section-heading'},el('div',{},el('p',{class:'eyebrow'},'EXPENSES'),el('h2',{},'这趟行程的花销')),button(summary.hasExpenses?'查看全部':'记录第一笔',()=>actions.navigate({type:summary.hasExpenses?'expenses':'expense-new',id:overview.trip.id}),summary.hasExpenses?'secondary':'primary')),el('div',{class:'expense-card-facts'},el('div',{},el('span',{},'累计'),el('strong',{},summary.hasExpenses?money(summary.totalCents):'—')),el('div',{},el('span',{},'预算状态'),el('strong',{class:summary.budgetState==='over'?'over-budget':''},summary.hasExpenses||summary.budgetState!=='unset'?budget:'未设置预算'))),summary.hasExpenses?el('div',{class:'recent-expenses'},summary.recentExpenses.map(item=>expenseRow(item))):el('p',{class:'muted'},'尚无记录。金额、分类、城市和日期会保存在这趟行程中。'));
 }
 
-function header(title,tripId,actions) {return el('header',{class:'page-header'},el('div',{},el('p',{class:'eyebrow'},'TRIP EXPENSES'),el('h1',{},title)),el('div',{class:'header-actions'},button('返回行程',()=>actions.navigate({type:'detail',id:tripId}),'secondary')));}
+function header(title,tripId,actions) {return pageHeader({eyebrow:'TRIP EXPENSES',title,secondaryActions:[button('返回行程',()=>actions.navigate({type:'detail',id:tripId}),'secondary')]});}
 
 function renderOverview(root,state,actions) {
   const {trip,summary,expenses}=state.overview,budget=summary.budgetState==='unset'?'未设置预算':summary.budgetState==='over'?`${money(summary.budgetRemainingCents)} · 已超预算`:`剩余 ${money(summary.budgetRemainingCents)}`;
-  root.append(header(`${trip.name} · 花销`,trip.id,actions),el('div',{class:'expense-toolbar'},button('＋ 记录花销',()=>actions.navigate({type:'expense-new',id:trip.id})),button('管理分类',()=>actions.navigate({type:'expense-categories',id:trip.id}),'secondary')));
-  const layout=el('div',{class:'expense-layout'});
+  root.append(header(`${trip.name} · 花销`,trip.id,actions),el('div',{class:'expense-toolbar'},actionGroup(button('管理分类',()=>actions.navigate({type:'expense-categories',id:trip.id}),'secondary'),button('＋ 记录花销',()=>actions.navigate({type:'expense-new',id:trip.id})))));
+  const layout=el('div',{class:'expense-journal'});
   layout.append(
-    el('section',{'data-expense-section':'summary',class:'expense-section expense-summary'},el('h2',{},'总览'),el('div',{class:'expense-summary-grid'},el('div',{},el('span',{},'累计花销'),el('strong',{},summary.hasExpenses?money(summary.totalCents):'—')),el('div',{},el('span',{},'预算'),el('strong',{},summary.budgetCents===null?'未设置预算':money(summary.budgetCents))),el('div',{},el('span',{},'预算余额'),el('strong',{class:summary.budgetState==='over'?'over-budget':''},summary.hasExpenses||summary.budgetCents!==null?budget:'—'))),!summary.hasExpenses?el('p',{class:'muted'},'尚无记录'):null),
-    el('section',{'data-expense-section':'category',class:'expense-section'},el('h2',{},'按分类'),summary.byCategory.length?el('ul',{class:'expense-breakdown'},summary.byCategory.map(item=>el('li',{},el('span',{},`${item.name} · ${item.count} 笔`),el('strong',{},money(item.totalCents))))):el('p',{class:'muted'},'尚无记录')),
-    el('section',{'data-expense-section':'city',class:'expense-section'},el('h2',{},'按城市'),summary.byCity.length?el('ul',{class:'expense-breakdown'},summary.byCity.map(item=>el('li',{},el('span',{},item.cityState==='removed'?`${item.cityName}（已移出路线）`:item.cityName),el('strong',{},money(item.totalCents))))):el('p',{class:'muted'},'尚无记录')),
-    el('section',{'data-expense-section':'records',class:'expense-section expense-records'},el('h2',{},'全部记录'),expenses.length?el('div',{class:'expense-list'},expenses.map(item=>expenseRow(item,{...actions,tripId:trip.id}))):el('p',{class:'muted'},'尚无记录'))
+    el('section',{'data-expense-section':'summary','data-spotlight':'',class:'journal-section expense-summary-band'},el('h2',{},'花销总览'),el('div',{class:'expense-summary-grid'},el('div',{},el('span',{},'累计花销'),el('strong',{},summary.hasExpenses?money(summary.totalCents):'—')),el('div',{},el('span',{},'预算'),el('strong',{},summary.budgetCents===null?'未设置预算':money(summary.budgetCents))),el('div',{},el('span',{},'预算余额'),el('strong',{class:summary.budgetState==='over'?'over-budget':''},summary.hasExpenses||summary.budgetCents!==null?budget:'—'))),!summary.hasExpenses?el('p',{class:'muted'},'尚无记录'):null),
+    el('section',{'data-expense-section':'category',class:'journal-section expense-breakdown-section'},el('h2',{},'按分类'),summary.byCategory.length?el('ul',{class:'expense-breakdown'},summary.byCategory.map(item=>el('li',{},el('span',{},`${item.name} · ${item.count} 笔`),el('strong',{},money(item.totalCents))))):el('p',{class:'muted'},'尚无记录')),
+    el('section',{'data-expense-section':'city',class:'journal-section expense-breakdown-section'},el('h2',{},'按城市'),summary.byCity.length?el('ul',{class:'expense-breakdown'},summary.byCity.map(item=>el('li',{},el('span',{},`${item.cityState==='removed'?`${item.cityName}（已移出路线）`:item.cityName} · ${item.count} 笔`),el('strong',{},money(item.totalCents))))):el('p',{class:'muted'},'尚无记录')),
+    el('section',{'data-expense-section':'records',class:'journal-section expense-records'},el('h2',{},'全部记录'),expenses.length?el('div',{class:'expense-list'},expenses.map(item=>expenseRow(item,{...actions,tripId:trip.id}))):el('p',{class:'muted'},'尚无记录'))
   );root.append(layout);
 }
 
