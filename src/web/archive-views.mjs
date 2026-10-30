@@ -1,4 +1,5 @@
 import {formatCents} from '../shared/money.mjs';
+import {formatVisitDate} from '../shared/footprint-format.mjs';
 import {button,el} from './views.mjs';
 
 const money=value=>`¥${formatCents(value)}`;
@@ -11,8 +12,12 @@ function list(rows,render) {return rows.length?el('ul',{class:'archive-list'},ro
 
 function planView(title,content) {
   if(!content)return section(title,empty());
-  const days=(content.days??[]).map(day=>el('article',{class:'archive-entry archive-day'},el('h4',{},day.date),...(day.activities??[]).map(activity=>el('div',{class:'archive-activity'},el('strong',{},activity.title),el('p',{},activity.description),activity.sourceIds?.length?el('p',{class:'archive-source-refs'},`引用：${activity.sourceIds.join('、')}`):null))));
-  return section(title,days.length?days:empty(),content.cautions?.length?el('div',{class:'archive-cautions'},el('h3',{},'注意事项'),el('ul',{},content.cautions.map(value=>el('li',{},value)))):null);
+  const trip=content.trip??{},cities=trip.cities??[],cityByCode=new Map(cities.map(city=>[city.cityCode,city]));
+  const route=cities.map(city=>city.cityName).join(' → ')||'未记录城市';
+  const budget=trip.budgetCents===null||trip.budgetCents===undefined?'未设置':money(trip.budgetCents);
+  const tripMeta=el('div',{class:'archive-guide-version-meta archive-entry'},el('h3',{},trip.name??'未命名攻略'),el('p',{},`${trip.startDate??'—'} — ${trip.endDate??'—'} · ${trip.travelerCount??'—'} 人 · 预算 ${budget}`),el('p',{class:'archive-route'},route));
+  const days=(content.days??[]).map(day=>el('article',{class:'archive-entry archive-day'},el('h4',{},day.date),...(day.activities??[]).map(activity=>{const city=cityByCode.get(activity.cityCode);return el('div',{class:'archive-activity'},el('strong',{},activity.title),el('p',{class:'archive-meta'},`城市：${city?.cityName??activity.cityName??'未记录'}`),el('p',{},activity.description),activity.sourceIds?.length?el('p',{class:'archive-source-refs'},`引用：${activity.sourceIds.join('、')}`):null);})));
+  return section(title,tripMeta,days.length?days:empty(),content.cautions?.length?el('div',{class:'archive-cautions'},el('h3',{},'注意事项'),el('ul',{},content.cautions.map(value=>el('li',{},value)))):null);
 }
 function expenseView(report) {
   const value=report.expenses;
@@ -27,11 +32,11 @@ function expenseView(report) {
     el('tbody',{},value.items.map(row=>el('tr',{'data-expense-row':''},el('td',{},row.spentDate),el('td',{},row.categoryName),el('td',{},row.cityName),el('td',{},row.note||'—'),el('td',{},money(row.amountCents))))));
   return section('花销统计与明细',facts,breakdowns,table);
 }
-function footprintView(report) {return section('足迹与备注',list(report.footprints,row=>el('li',{class:'archive-entry'},el('strong',{},`${row.provinceName} · ${row.cityName}`),el('span',{},` ${row.dateStart}${row.dateEnd&&row.dateEnd!==row.dateStart?` — ${row.dateEnd}`:''}`),row.note?el('p',{},row.note):null)));}
+function footprintView(report) {return section('足迹与备注',list(report.footprints,row=>el('li',{class:'archive-entry'},el('strong',{},`${row.provinceName} · ${row.cityName}`),el('span',{},` ${formatVisitDate(row)}`),row.note?el('p',{},row.note):null)));}
 function guideView(report) {
   if(!report.guide)return section('攻略与每日安排',empty());
   const guide=report.guide,sources=guide.sources.length?guide.sources.map(source=>el('article',{class:'archive-entry archive-source'},el('h4',{},`${source.sourceId} · ${source.title}`),el('p',{},source.summary),source.href?el('a',{class:'archive-url',href:source.href,target:'_blank',rel:'noopener noreferrer'},source.url):el('p',{class:'archive-url'},source.url),el('p',{class:'archive-meta'},`发布日期：${source.publishedAt??'未知'} · 检索时间：${time(source.retrievedAt)}`))):[empty()];
-  return el('div',{class:'archive-guide'},section('攻略与每日安排',el('p',{class:'archive-meta'},`${guide.provider} · ${guide.model}${guide.edited?' · 已人工修改':''}`),planView('当前攻略',guide.current)),planView('创建正式行程时的攻略快照',guide.conversionSnapshot),planView('模型原始输出',guide.original),section('检索来源',...sources));
+  return el('div',{class:'archive-guide'},section('攻略与每日安排',el('p',{class:'archive-meta'},`${guide.provider} · ${guide.model}${guide.edited?' · 已人工修改':''}`),el('p',{class:'archive-meta'},`创建于 ${time(guide.createdAt)} · 更新于 ${time(guide.updatedAt)}`),planView('当前攻略',guide.current)),planView('创建正式行程时的攻略快照',guide.conversionSnapshot),planView('模型原始输出',guide.original),section('检索来源',...sources));
 }
 function tripChapter(report,{standalone=false}={}) {
   const trip=report.trip;
@@ -39,7 +44,7 @@ function tripChapter(report,{standalone=false}={}) {
 }
 function totalReport(report) {
   const summary=report.summary;
-  return el('div',{class:'archive-document'},el('section',{class:'archive-cover archive-total-cover'},el('p',{class:'archive-kicker'},'TRAVEL ARCHIVE · 个人总档案'),el('h1',{},'我的旅行足迹'),el('p',{},`收录截至 ${report.cutoffDate} 已结束的全部行程`),el('p',{class:'archive-meta'},`生成于 ${time(report.generatedAt)} · 数据库版本 v${report.databaseVersion}`)),el('section',{class:'archive-summary-page'},el('h2',{},'卷首总览'),el('div',{class:'archive-facts'},item('已结束行程',`${summary.tripCount} 趟`),item('累计旅行',`${summary.travelDayCount} 天`),item('累计花销',money(summary.totalExpenseCents)),item('到访省份',`${summary.provinceCount} 个`),item('到访城市',`${summary.cityCount} 座`),item('到访次数',`${summary.visitCount} 次`)),el('div',{class:'archive-breakdowns'},el('div',{},el('h3',{},'按年份'),list(report.byYear,row=>el('li',{},el('span',{},`${row.year} · ${row.tripCount} 趟`),el('strong',{},money(row.totalExpenseCents))))),el('div',{},el('h3',{},'按分类'),list(report.byCategory,row=>el('li',{},el('span',{},`${row.name} · ${row.count} 笔`),el('strong',{},money(row.totalCents)))))),el('p',{class:'archive-meta'},`未归属具体城市的整趟花销：${money(report.wholeTripExpenseCents)}`)),el('section',{class:'archive-directory'},el('h2',{},'年度目录'),...report.directory.map(group=>el('div',{class:'archive-year'},el('h3',{},group.year),...group.trips.map(row=>el('div',{class:'archive-entry archive-directory-row'},el('strong',{},row.name),el('span',{},`${row.startDate} — ${row.endDate} · ${row.route.join(' → ')} · ${money(row.totalExpenseCents)}`)))))),...report.trips.map(item=>tripChapter(item)),section('卷末 · 全部足迹索引',list(report.footprints,row=>el('li',{class:'archive-entry'},el('strong',{},`${row.provinceName} · ${row.cityName}`),el('span',{},` ${row.dateStart} · ${row.source==='manual'?'手动补录':row.source==='detached'?'历史行程':'自动同步'}`),row.note?el('p',{},row.note):null))));
+  return el('div',{class:'archive-document'},el('section',{class:'archive-cover archive-total-cover'},el('p',{class:'archive-kicker'},'TRAVEL ARCHIVE · 个人总档案'),el('h1',{},'我的旅行足迹'),el('p',{},`收录截至 ${report.cutoffDate} 已结束的全部行程`),el('p',{class:'archive-meta'},`生成于 ${time(report.generatedAt)} · 数据库版本 v${report.databaseVersion}`)),el('section',{class:'archive-summary-page'},el('h2',{},'卷首总览'),el('div',{class:'archive-facts'},item('已结束行程',`${summary.tripCount} 趟`),item('累计旅行',`${summary.travelDayCount} 天`),item('累计花销',money(summary.totalExpenseCents)),item('到访省份',`${summary.provinceCount} 个`),item('到访城市',`${summary.cityCount} 座`),item('到访次数',`${summary.visitCount} 次`)),el('div',{class:'archive-breakdowns'},el('div',{},el('h3',{},'按年份'),list(report.byYear,row=>el('li',{},el('span',{},`${row.year} · ${row.tripCount} 趟`),el('strong',{},money(row.totalExpenseCents))))),el('div',{},el('h3',{},'按分类'),list(report.byCategory,row=>el('li',{},el('span',{},`${row.name} · ${row.count} 笔`),el('strong',{},money(row.totalCents)))))),el('div',{class:'archive-total-cities'},el('h3',{},'跨行程城市花销'),list(report.byCity,row=>el('li',{},el('span',{},`${row.provinceName} · ${row.cityName} · ${row.count} 笔`),el('strong',{},money(row.totalCents))))),el('p',{class:'archive-meta'},`未归属具体城市的整趟花销：${money(report.wholeTripExpenseCents)}`)),el('section',{class:'archive-directory'},el('h2',{},'年度目录'),...report.directory.map(group=>el('div',{class:'archive-year'},el('h3',{},group.year),...group.trips.map(row=>el('div',{class:'archive-entry archive-directory-row'},el('strong',{},row.name),el('span',{},`${row.startDate} — ${row.endDate} · ${row.route.join(' → ')} · ${money(row.totalExpenseCents)}`)))))),...report.trips.map(item=>tripChapter(item)),section('卷末 · 全部足迹索引',list(report.footprints,row=>el('li',{class:'archive-entry'},el('strong',{},`${row.provinceName} · ${row.cityName}`),el('span',{},` ${formatVisitDate(row)} · ${row.source==='manual'?'手动补录':row.source==='detached'?'历史行程':'自动同步'}`),row.note?el('p',{},row.note):null))));
 }
 function reportToolbar(report,actions) {const filename=report.kind==='trip'?`旅行档案-${report.trip.name}-${report.trip.endDate}.pdf`:`旅行总档案-截至${report.cutoffDate}.pdf`;return el('div',{class:'archive-actions'},el('div',{},el('strong',{},'打印预览'),el('p',{},`建议文件名：${filename}`)),button('打印/保存为 PDF',actions.print));}
 

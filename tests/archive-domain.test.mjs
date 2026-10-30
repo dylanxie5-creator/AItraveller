@@ -58,3 +58,11 @@ test('archive aggregation handles collisions boundaries and overflow',()=>{
   const huge=report({trip:{name:'巨大花销'},expense:{total:Number.MAX_SAFE_INTEGER,category:'其他',cityName:'整个行程',cityState:'trip'}});
   assert.throws(()=>buildTravelArchive({tripArchives:[huge,whole],allVisits:[],generatedAt,cutoffDate}),RangeError);
 });
+
+test('removed city expenses retain their province and merge with current-route totals',()=>{
+  const current=report({trip:{name:'南京仍在路线',startDate:'2026-09-01',endDate:'2026-09-02'},expense:{total:100,cityName:'南京市',cityState:'current'}});
+  const removed=report({trip:{name:'南京已移出路线',startDate:'2026-08-01',endDate:'2026-08-02',cities:[]},expense:{total:200,cityName:'南京市',cityState:'removed'}});
+  const value=buildTravelArchive({tripArchives:[current,removed],allVisits:[],generatedAt,cutoffDate});
+  assert.deepEqual(removed.expenses.byCity,[{provinceName:'江苏省',cityName:'南京市',cityState:'removed',totalCents:200,count:1}]);
+  assert.deepEqual(value.byCity,[{provinceName:'江苏省',cityName:'南京市',totalCents:300,count:2}]);
+});

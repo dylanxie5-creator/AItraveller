@@ -1,3 +1,5 @@
+import {getCityByCode} from '../domain/city-catalog.mjs';
+
 const isoDate=/^\d{4}-\d{2}-\d{2}$/u;
 const copy=value=>value===null?null:structuredClone(value);
 function safeAdd(left,right) {const value=left+right;if(!Number.isSafeInteger(value))throw new RangeError('档案金额超出安全范围');return value;}
@@ -16,7 +18,7 @@ export function buildTripArchive({trip,expenseOverview,visits,guide,generatedAt,
   const summary=expenseOverview.summary,items=expenseOverview.expenses.map(item=>({spentDate:item.spentDate,categoryName:item.categoryName,cityName:item.cityName,cityState:item.cityState,amountCents:item.amountCents,note:item.note??''}));
   const expenses={hasExpenses:summary.hasExpenses,totalCents:summary.totalCents,budgetCents:summary.budgetCents,budgetRemainingCents:summary.budgetRemainingCents,budgetState:summary.budgetState,
     byCategory:summary.byCategory.map(item=>({name:item.name,totalCents:item.totalCents,count:item.count})),
-    byCity:summary.byCity.map(item=>({provinceName:item.cityCode===null?'':cityByCode.get(item.cityCode)?.provinceName??'',cityName:item.cityName,cityState:item.cityState,totalCents:item.totalCents,count:item.count})),items};
+    byCity:summary.byCity.map(item=>({provinceName:item.cityCode===null?'':(cityByCode.get(item.cityCode)??getCityByCode(item.cityCode))?.provinceName??'',cityName:item.cityName,cityState:item.cityState,totalCents:item.totalCents,count:item.count})),items};
   let guideView=null;
   if(guide)guideView={provider:guide.provider,model:guide.model,edited:guide.edited,createdAt:guide.createdAt,updatedAt:guide.updatedAt,current:copy(guide.content),conversionSnapshot:copy(guide.conversionSnapshot),original:copy(guide.original),sources:guide.sources.map(source=>({sourceId:source.sourceId,title:source.title,url:source.url,href:safeHref(source.url),summary:source.summary,publishedAt:source.publishedAt??null,retrievedAt:source.retrievedAt}))};
   return {kind:'trip',generatedAt,cutoffDate,databaseVersion,trip:{name:trip.name,startDate:trip.startDate,endDate:trip.endDate,travelerCount:trip.travelerCount,budgetCents:trip.budgetCents,durationDays:days(trip.startDate,trip.endDate),cities},expenses,footprints:visits.map(visitView),guide:guideView};

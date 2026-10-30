@@ -59,11 +59,25 @@ test('archive report renders hostile data as text complete guide versions and al
   for(const label of ['当前攻略','创建正式行程时的攻略快照','模型原始输出','检索来源','足迹与备注'])assert.match(text,new RegExp(label));assert.ok(all.some(node=>node.tag==='button'&&textOf(node).includes('打印/保存为 PDF')));
 }));
 
+test('archive report renders divergent guide metadata and activity city assignments',()=>withDom(()=>{
+  const report=tripReport();
+  const plan=(name,cityName,travelerCount,budgetCents)=>({trip:{name,startDate:'2026-10-10',endDate:'2026-10-13',travelerCount,budgetCents,cities:[{cityCode:'320100',cityName,provinceName:'江苏省',arrivalDate:'2026-10-10',departureDate:'2026-10-13'}]},days:[{date:'2026-10-10',activities:[{cityCode:'320100',title:'共同活动',description:'共同说明',sourceIds:[]}]}],cautions:[]});
+  report.guide={provider:'deepseek',model:'deepseek-chat',edited:true,createdAt:'2026-10-01T00:00:00.000Z',updatedAt:'2026-10-02T00:00:00.000Z',current:plan('当前版专属名称','当前版路线城市',2,10000),conversionSnapshot:plan('转换版专属名称','转换版路线城市',3,20000),original:plan('原始版专属名称','原始版路线城市',4,30000),sources:[]};
+  const root=new FakeNode('main');renderArchiveView(root,{type:'archive-report',route:{type:'trip-archive-print',id:'trip-1'},report},{print(){},retry(){}});const text=textOf(root);
+  for(const expected of ['当前版专属名称','转换版专属名称','原始版专属名称','当前版路线城市','转换版路线城市','原始版路线城市','2 人','3 人','4 人','创建于','更新于'])assert.ok(text.includes(expected),expected);
+}));
+
+test('total archive renders cross-trip city totals and precision-aware historical footprint ranges',()=>withDom(()=>{
+  const report=totalReport([]);report.byCity=[{provinceName:'江苏省',cityName:'南京市',totalCents:12345,count:7}];report.wholeTripExpenseCents=500;report.footprints=[{provinceName:'四川省',cityName:'成都市',datePrecision:'trip_range',dateStart:'2026-01-01',dateEnd:'2026-01-19',source:'detached',note:'历史足迹'},{provinceName:'广东省',cityName:'广州市',datePrecision:'year',dateStart:'2024',dateEnd:null,source:'manual',note:''}];
+  const root=new FakeNode('main');renderArchiveView(root,{type:'archive-report',route:{type:'archive-print'},report},{print(){},retry(){}});const text=textOf(root);
+  for(const expected of ['跨行程城市花销','江苏省 · 南京市 · 7 笔','¥123.45','2026年1月1日—1月19日','2024年','历史行程','手动补录'])assert.ok(text.includes(expected),expected);
+}));
+
 test('archive empty sections remain explicit and incomplete states have no print action',()=>withDom(()=>{
   const root=new FakeNode('main');renderArchiveView(root,{type:'archive-report',route:{type:'trip-archive-print',id:'trip-1'},report:tripReport()},{print(){},retry(){}});const text=textOf(root);for(const label of ['攻略与每日安排','花销统计与明细','足迹与备注','暂无相关记录'])assert.match(text,new RegExp(label));
   for(const state of [{type:'archive-loading',route:{type:'archive-print'}},{type:'archive-error',route:{type:'archive-print'},message:'失败'},{type:'archive-empty',route:{type:'archive-home'},report:totalReport([])}]){const target=new FakeNode('main');renderArchiveView(target,state,{print(){},retry(){}});assert.equal(nodes(target).some(node=>node.tag==='button'&&textOf(node).includes('打印/保存为 PDF')),false);}
 }));
 
 test('archive stylesheet declares fixed A4 pagination and long-content guards',()=>{
-  const css=readFileSync(new URL('../src/web/archive-styles.css',import.meta.url),'utf8');assert.match(css,/@page\s*\{[^}]*size:\s*A4 portrait/s);assert.match(css,/@media\s+print/);assert.match(css,/thead\s*\{[^}]*table-header-group/s);assert.match(css,/break-before:\s*page/);assert.match(css,/break-inside:\s*avoid/);assert.match(css,/overflow-wrap:\s*anywhere/);
+  const css=readFileSync(new URL('../src/web/archive-styles.css',import.meta.url),'utf8');assert.match(css,/@page\s*\{[^}]*size:\s*A4 portrait/s);assert.match(css,/@media\s+print/);assert.match(css,/thead\s*\{[^}]*table-header-group/s);assert.match(css,/break-before:\s*page/);assert.match(css,/break-inside:\s*avoid/);assert.match(css,/\.archive-document\s*\{[^}]*overflow-wrap:\s*anywhere/s);assert.match(css,/\.archive-expense-table\s*\{[^}]*table-layout:\s*fixed/s);assert.match(css,/\.archive-expense-table[^}]*td[^}]*\{[^}]*overflow-wrap:\s*anywhere/s);
 });
