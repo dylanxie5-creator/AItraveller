@@ -1,4 +1,4 @@
-import {el,button} from './views.mjs';
+import {actionGroup,button,el,pageHeader,statusBadge} from './ui-elements.mjs';
 
 export const providers=Object.freeze({
   deepseek:{name:'DeepSeek',model:'deepseek-flash',endpoint:'https://api.deepseek.com/chat/completions'},
@@ -24,7 +24,7 @@ export function buildSettingsCommand(current,raw) {
   if(result.search.keyAction==='replace'){if(!raw.search.apiKey)throw new Error('智谱搜索：请输入新的 API Key');result.search.apiKey=raw.search.apiKey;}
   return result;
 }
-const heading=(eyebrow,title,action)=>el('header',{class:'page-header'},el('div',{},el('p',{class:'eyebrow'},eyebrow),el('h1',{},title)),action??[]);
+const heading=(eyebrow,title,action)=>pageHeader({eyebrow,title,secondaryActions:action?[action]:[]});
 const field=(label,input)=>el('div',{class:'field'},el('label',{for:input.id},label),input);
 const inputNode=(id,value,attributes={})=>el('input',{id,value:value??'',...attributes});
 function statusText(job){return {queued:'等待开始',searching:'正在检索资料',generating:'正在生成攻略',succeeded:'攻略已保存',failed:'生成失败',interrupted:'上次运行已中断'}[job.state]??'任务状态未知';}
@@ -62,7 +62,8 @@ function renderSettings(root,state,actions) {
     el('label',{},el('input',{type:'radio',name:'search-mode',value:'separate',checked:state.settings.search.keyMode==='separate'}),'使用独立智谱搜索 Key'),
     field('独立搜索 Key',inputNode('search-key','',{name:'search-key',type:'password',autocomplete:'new-password'})),
     el('div',{class:'key-actions'},...[['retain','保留'],['replace','替换'],['delete','明确删除']].map(([key,label])=>el('label',{},el('input',{type:'radio',name:'search-key-action',value:key,checked:defaultSearchKeyAction(state.settings.search)===key,disabled:key==='retain'&&state.settings.search.keyMode==='separate'&&!state.settings.search.keyConfigured}),label)))));
-  form.append(notice,button(state.busy?'正在保存…':'保存设置',()=>{},'primary'));form.querySelector('button').type='submit';
+  const save=button(state.busy?'正在保存…':'保存设置',()=>{},'primary',{'aria-busy':state.busy?'true':null,'data-state':state.busy?'busy':'ready',disabled:state.busy});
+  form.append(notice,actionGroup(save));save.type='submit';
   if(state.saved)form.prepend(el('p',{class:'success-note',role:'status'},'设置已保存，Key 输入框已清空。'));
   root.append(form);
 }
@@ -82,10 +83,11 @@ function renderPlanner(root,state,actions) {
   const cityInput=form.querySelector('#cityCodes');cityInput.value=data.cityCodes.join(',');
   form.append(field('偏好（可选）',el('textarea',{id:'preferences',name:'preferences',maxlength:1000},data.preferences??'')),
     field('模型平台',el('select',{id:'provider',name:'provider',required:true},configured.length?configured.map(([id,v])=>el('option',{value:id},`${providers[id].name} · ${v.model}`)):el('option',{value:''},'请先配置模型和 Key'))));
-  if(state.error)form.append(el('p',{class:'form-error',role:'alert'},state.error),state.uncertain?button('按同一请求编号重试',()=>actions.retrySubmit(),'secondary'):[]);
-  const submit=button(state.busy?'正在提交…':'确认成本并开始生成',()=>{});submit.type='submit';submit.disabled=state.busy||state.uncertain||!configured.length;
+  if(state.error)form.append(el('p',{class:'form-error',role:'alert'},state.error));
+  const retry=state.uncertain?button('按同一请求编号重试',()=>actions.retrySubmit(),'secondary'):null;
+  const submit=button(state.busy?'正在提交…':'确认成本并开始生成',()=>{},'primary',{'aria-busy':state.busy?'true':null,'data-state':state.busy?'busy':state.uncertain||!configured.length?'disabled':'ready'});submit.type='submit';submit.disabled=state.busy||state.uncertain||!configured.length;
   if(state.uncertain)form.querySelectorAll('input,textarea,select').forEach(control=>{control.disabled=true;});
-  form.append(submit);root.append(form);
+  form.append(actionGroup(retry,submit));root.append(form);
   for(const [key,value] of Object.entries(state.fields??{})) {
     if(!aiFields.has(key))continue;const control=form.querySelector(`#${key}`);if(!control)continue;
     control.setAttribute('aria-invalid','true');control.parentElement?.append(el('span',{class:'field-error',role:'alert'},value));
@@ -93,10 +95,10 @@ function renderPlanner(root,state,actions) {
   const first=firstAiField(state.fields);if(first)form.querySelector(`#${first}`)?.focus();
 }
 function renderJob(root,state,actions) {
-  const job=state.job;root.append(heading('AI PLANNING JOB','规划任务'),el('section',{class:'job-card'},el('span',{class:`badge ${job.state}`},statusText(job)),el('h2',{},job.input?.name??'旅行攻略'),el('p',{},`已预留：检索 ${job.searchCalls}/3 次 · 模型 ${job.modelCalls}/1 次`),
+  const job=state.job;root.append(heading('AI PLANNING JOB','规划任务'),el('section',{class:'job-card'},statusBadge(statusText(job),job.state),el('h2',{},job.input?.name??'旅行攻略'),el('p',{},`已预留：检索 ${job.searchCalls}/3 次 · 模型 ${job.modelCalls}/1 次`),
     job.error?el('p',{class:'form-error',role:'alert'},job.error.message):[],
-    job.state==='succeeded'?button('查看攻略',()=>actions.navigate({type:'ai-plan',id:job.planId})):[],
-    ['failed','interrupted'].includes(job.state)?button('基于保留输入新生成',()=>actions.reuseJob(job),'secondary'):[]));
+    actionGroup(job.state==='succeeded'?button('查看攻略',()=>actions.navigate({type:'ai-plan',id:job.planId})):null,
+      ['failed','interrupted'].includes(job.state)?button('基于保留输入新生成',()=>actions.reuseJob(job),'secondary'):null)));
 }
 function renderPlans(root,state,actions) {
   root.append(heading('SAVED AI GUIDES','我的 AI 攻略',button('＋ 新建 AI 规划',()=>actions.navigate({type:'ai-new'}))));
@@ -104,7 +106,7 @@ function renderPlans(root,state,actions) {
   root.append(el('div',{class:'trip-grid'},state.plans.map(plan=>el('button',{type:'button',class:'trip-card',onClick:()=>actions.navigate({type:'ai-plan',id:plan.id})},el('span',{class:'badge'},plan.edited?'已编辑':'模型原稿'),el('h3',{},plan.content.trip.name),el('p',{},`${plan.content.trip.startDate} — ${plan.content.trip.endDate}`),el('span',{class:'muted'},`${providers[plan.provider]?.name??plan.provider} · ${plan.model}`)))));
 }
 export function renderPlan(root,plan,actions,{editing=false}={}) {
-  root.append(heading('SAVED AI GUIDE',plan.content.trip.name,el('div',{class:'header-actions'},editing?[]:button('手工编辑',()=>actions.navigate({type:'ai-plan-edit',id:plan.id}),'secondary'),button('创建正式行程',()=>actions.convert(plan)))));
+  root.append(heading('SAVED AI GUIDE',plan.content.trip.name,actionGroup(editing?null:button('手工编辑',()=>actions.navigate({type:'ai-plan-edit',id:plan.id}),'secondary'),button('创建正式行程',()=>actions.convert(plan)))));
   if(plan.conversion)root.append(el('p',{class:plan.conversion.status==='deleted'?'form-error':'success-note'},plan.conversion.status==='deleted'?'由此攻略创建的行程已删除；冻结快照仍保留。':'已创建正式行程；后续编辑攻略不会覆盖该行程快照。'));
   for(const day of plan.content.days) {
     const activities=day.activities.map(item=>el('article',{class:'activity'},

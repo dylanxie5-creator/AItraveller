@@ -20,7 +20,8 @@ export function icon(name,{label=null,className=''}={}) {
 
 export function button(text,action,kind='primary',attributes={}) {
   const extraClass=attributes.class?` ${attributes.class}`:'';
-  return el('button',{...attributes,type:'button',class:`button ${kind}${extraClass}`,onClick:action},text);
+  const state=attributes['data-state']??(attributes['aria-busy']===true||attributes['aria-busy']==='true'?'busy':attributes.disabled?'disabled':kind==='danger'?'destructive':'ready');
+  return el('button',{...attributes,type:'button',class:`button ${kind}${extraClass}`,'data-state':state,onClick:action},text);
 }
 
 export function pageHeader({eyebrow,title,primaryAction=null,secondaryActions=[]}) {
@@ -30,5 +31,22 @@ export function pageHeader({eyebrow,title,primaryAction=null,secondaryActions=[]
 }
 
 export function statusBadge(text,tone='neutral') {
-  return el('span',{class:'badge status-badge','data-tone':tone},text);
+  return el('span',{class:`badge status-badge ${tone}`,'data-tone':tone},text);
+}
+
+export function stepper({steps,currentStep}) {
+  return el('ol',{class:'stepper','aria-label':'行程创建步骤'},steps.map((step,index)=>{
+    const state=step.state??(step.id===currentStep?'current':'upcoming');
+    return el('li',{'data-step':step.id,'data-state':state,'aria-current':state==='current'?'step':null},
+      el('span',{class:'step-index','aria-hidden':'true'},state==='completed'?'✓':String(index+1)),
+      el('span',{class:'step-copy'},el('span',{class:'step-label'},step.label),state==='completed'?el('span',{class:'step-status'},'已完成'):null));
+  }));
+}
+
+export function fieldMessage({id,text,tone='hint'}) {
+  return el('span',{id,class:`field-message ${tone}`,'data-tone':tone,role:tone==='error'?'alert':null,hidden:!text},text??'');
+}
+
+export function actionGroup(...children) {
+  return el('div',{class:'action-group'},children);
 }

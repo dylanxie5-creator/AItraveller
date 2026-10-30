@@ -1,4 +1,4 @@
-import {el,button} from './views.mjs';
+import {actionGroup,button,el,pageHeader} from './ui-elements.mjs';
 const clone=value=>structuredClone(value);
 const errorMessage=error=>error?.message??'保存失败，请重试';
 export function createAiPlanEditor({api,plan,render,navigate,confirm=()=>false}) {
@@ -26,7 +26,7 @@ const input=(value,onInput,attributes={})=>el('input',{value,...attributes,onInp
 export const editorFieldId=(dayIndex,activityIndex,field)=>`day-${dayIndex}-activity-${activityIndex}-${field}`;
 export function renderAiEditor(root,state,actions,{focusField}={}) {
   root.replaceChildren();
-  root.append(el('header',{class:'page-header'},el('div',{},el('p',{class:'eyebrow'},'MANUAL GUIDE EDITOR'),el('h1',{},'手工编辑攻略')),el('span',{class:'save-status'},state.dirty?'有未保存修改':'已保存')));
+  root.append(pageHeader({eyebrow:'MANUAL GUIDE EDITOR',title:'手工编辑攻略',secondaryActions:[el('span',{class:'save-status'},state.dirty?'有未保存修改':'已保存')]}));
   if(state.error)root.append(el('p',{class:'form-error',role:'alert'},state.error));
   const content=state.content;
   content.days.forEach((day,dayIndex)=>{
@@ -49,6 +49,6 @@ export function renderAiEditor(root,state,actions,{focusField}={}) {
   root.append(el('section',{class:'form-panel'},el('h2',{},'出行提醒'),el('label',{for:'editor-cautions',class:'field-hint'},'每行一条提醒'),el('textarea',{id:'editor-cautions',class:'wide-textarea',onInput:event=>actions.change(['cautions'],event.target.value.split('\n').map(value=>value.trim()).filter(Boolean)),maxlength:2000},content.cautions.join('\n'))));
   root.append(el('details',{class:'snapshot-panel'},el('summary',{},'查看模型原始快照（只读）'),el('pre',{},JSON.stringify(state.plan.original,null,2))),
     el('details',{class:'snapshot-panel'},el('summary',{},'查看检索资料（只读）'),el('ul',{},state.plan.sources.map(source=>el('li',{},`${source.sourceId} · ${source.title}`)))));
-  root.append(el('div',{class:'form-actions'},button('返回攻略',()=>actions.navigate({type:'ai-plan',id:state.plan.id}),'secondary'),button(state.busy?'正在保存…':'保存手工修改',()=>actions.save())));
+  root.append(el('div',{class:'form-actions'},actionGroup(button('返回攻略',()=>actions.navigate({type:'ai-plan',id:state.plan.id}),'secondary'),button(state.busy?'正在保存…':'保存手工修改',()=>actions.save(),'primary',{'aria-busy':state.busy?'true':null,'data-state':state.busy?'busy':'ready',disabled:state.busy}))));
   if(focusField)root.querySelector(`[data-editor-field="${CSS.escape(focusField)}"]`)?.focus();
 }

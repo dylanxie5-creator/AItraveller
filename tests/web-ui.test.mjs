@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {button,icon,pageHeader,statusBadge} from '../src/web/ui-elements.mjs';
+import {actionGroup,button,fieldMessage,icon,pageHeader,statusBadge,stepper} from '../src/web/ui-elements.mjs';
 import {createUiRuntime} from '../src/web/ui-runtime.mjs';
 
 class FakeNode {
@@ -42,6 +42,17 @@ test('shared UI elements expose stable button, icon, header and badge semantics'
   const heading=pageHeader({eyebrow:'TRAVEL JOURNAL',title:'旅行概览',primaryAction:save,secondaryActions:[button('查看全部',()=>{},'secondary')]});
   assert.equal(heading.tag,'header');
   assert.equal(heading.children.filter(child=>child instanceof FakeNode).length,2);
+}));
+
+test('shared stepper exposes completed current and upcoming states without fake links',()=>withDom(()=>{
+  const node=stepper({currentStep:'route',steps:[
+    {id:'basic',label:'基本信息',state:'completed'},
+    {id:'route',label:'城市路线',state:'current'},
+    {id:'confirm',label:'确认保存',state:'upcoming'},
+  ]});
+  const rows=node.children.filter(child=>child instanceof FakeNode),texts=row=>{const values=[];(function walk(item){if(item.tag==='#text')values.push(item.text);for(const child of item.children??[])walk(child);})(row);return values.join(' ');};
+  assert.equal(rows[1].getAttribute('aria-current'),'step');assert.match(texts(rows[0]),/已完成/);assert.equal(rows[2].children.some(child=>['button','a'].includes(child.tag)),false);
+  assert.equal(fieldMessage({id:'name-help',text:'必填',tone:'error'}).getAttribute('role'),'alert');assert.match(actionGroup(button('继续',()=>{})).className,/action-group/);
 }));
 
 class EventTargetFake {

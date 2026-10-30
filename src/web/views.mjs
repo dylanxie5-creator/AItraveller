@@ -1,5 +1,5 @@
 import {renderHomeExpenseCard,renderTripExpenseCard} from './expense-views.mjs';
-import {el,button} from './ui-elements.mjs';
+import {actionGroup,button,el,fieldMessage,stepper} from './ui-elements.mjs';
 export {el,button} from './ui-elements.mjs';
 export function homeFootprintSummary(data) {const value=data?.footprints??{};const provinceCount=Number.isSafeInteger(value.provinceCount)?value.provinceCount:0,cityCount=Number.isSafeInteger(value.cityCount)?value.cityCount:0,visitCount=Number.isSafeInteger(value.visitCount)?value.visitCount:0;return {provinceCount,cityCount,visitCount,empty:visitCount===0,route:{type:'footprints'}};}
 export function tripCard(trip,actions) {return el('button',{class:'trip-card',type:'button',onClick:()=>actions.navigate({type:'detail',id:trip.id})},el('span',{class:`badge ${trip.status}`},trip.statusLabel),el('h3',{},trip.name),el('p',{class:'route-text'},trip.routeText),el('div',{class:'trip-meta'},el('span',{},`${trip.startDate} — ${trip.endDate}`),el('span',{},`${trip.travelerCount} 人 · ${trip.budgetText}`)));}
@@ -45,12 +45,14 @@ export function renderForm(root,state,controller,api,{full=true}={}) {
   }
   root.replaceChildren();const steps=['basic','route','confirm'];
   root.append(el('header',{class:'page-header'},el('div',{},el('p',{class:'eyebrow'},'PLAN YOUR JOURNEY'),el('h1',{},state.baseTripRevision?'编辑行程':'新建行程')),el('span',{id:'save-status',class:'save-status',role:'status'},status)));
-  root.append(el('ol',{class:'steps','aria-label':'行程创建步骤'},...['基本信息','城市路线','确认保存'].map((label,i)=>el('li',{class:steps.indexOf(state.step)>=i?'current':'','aria-current':state.step===steps[i]?'step':null},el('span',{},i+1),label))));
+  const currentStep=steps.indexOf(state.step);
+  root.append(stepper({currentStep:state.step,steps:['基本信息','城市路线','确认保存'].map((label,index)=>({id:steps[index],label,state:index<currentStep?'completed':index===currentStep?'current':'upcoming'}))}));
   const panel=el('section',{class:'form-panel'}),errors=state.errors;
   function field(label,key,value,{type='text',id=key,onInput,placeholder,min,max}={}) {
-    const errorId=`error-${id}`;
+    const errorId=`message-${id}`;
     const control=el('input',{id,type,value:value??'',placeholder,min,max,step:type==='number'?'1':null,'data-form-control':'','data-error-key':key,'aria-invalid':Boolean(errors[key]),'aria-describedby':errorId,disabled:state.busy,onInput:event=>onInput(event.target.value)});
-    return el('div',{class:'field'},el('label',{for:id},label),control,el('span',{id:errorId,'data-field-error':key,class:'field-error',hidden:!errors[key],role:'alert'},errors[key]??''));
+    const message=fieldMessage({id:errorId,text:errors[key]??'',tone:'error'});message.setAttribute('data-field-error',key);
+    return el('div',{class:'field'},el('label',{for:id},label),control,message);
   }
   const data=state.input;
   if(state.step==='basic') {
@@ -67,8 +69,8 @@ export function renderForm(root,state,controller,api,{full=true}={}) {
     const basicErrors=Object.entries(errors).filter(([key])=>!key.startsWith('city_')&&key!=='cities');if(basicErrors.length)panel.append(el('p',{class:'form-error'},'基本信息需要修正，请返回上一步：'+basicErrors.map(([,value])=>value).join('；')));
     if(!data.cities.length)panel.append(el('p',{class:'route-empty'},'还未添加城市。搜索后点击结果即可加入路线。'));
     data.cities.forEach((city,index)=>{
-      const up=button('上移',()=>controller.moveCity(index,index-1),'secondary');up.setAttribute('aria-label',`上移${city.cityName}`);up.disabled=state.busy||index===0;up.setAttribute('data-form-control','');
-      const down=button('下移',()=>controller.moveCity(index,index+1),'secondary');down.setAttribute('aria-label',`下移${city.cityName}`);down.disabled=state.busy||index===data.cities.length-1;down.setAttribute('data-form-control','');
+      const up=button('上移',()=>controller.moveCity(index,index-1),'secondary',{'data-state':state.busy||index===0?'disabled':'ready'});up.setAttribute('aria-label',`上移${city.cityName}`);up.disabled=state.busy||index===0;up.setAttribute('data-form-control','');
+      const down=button('下移',()=>controller.moveCity(index,index+1),'secondary',{'data-state':state.busy||index===data.cities.length-1?'disabled':'ready'});down.setAttribute('aria-label',`下移${city.cityName}`);down.disabled=state.busy||index===data.cities.length-1;down.setAttribute('data-form-control','');
       const remove=button('移除',()=>controller.removeCity(index),'text');remove.setAttribute('aria-label',`移除${city.cityName}`);remove.setAttribute('data-form-control','');
       panel.append(el('section',{class:'route-city'},el('div',{class:'route-city-header'},el('h3',{},`${String(index+1).padStart(2,'0')} · ${city.cityName??city.cityCode}`),el('div',{class:'city-controls'},up,down,remove)),el('div',{class:'form-grid'},field(`${city.cityName}到达日期`,`city_${index}`,city.arrivalDate,{id:`arrival-${index}`,type:'date',min:data.startDate,max:data.endDate,onInput:value=>controller.changeCity(index,'arrivalDate',value)}),field(`${city.cityName}离开日期`,`city_${index}`,city.departureDate,{id:`departure-${index}`,type:'date',min:data.startDate,max:data.endDate,onInput:value=>controller.changeCity(index,'departureDate',value)}))));
     });
@@ -76,13 +78,13 @@ export function renderForm(root,state,controller,api,{full=true}={}) {
     panel.append(el('h2',{},'出发前，再确认一次'),el('div',{class:'confirmation'},el('h3',{},data.name),el('p',{},`${data.startDate} — ${data.endDate}`),el('p',{},`${data.travelerCount} 人出行 · ${data.budgetYuan?'预算 ¥'+data.budgetYuan:'未设置预算'}`)),el('ol',{class:'confirm-route'},data.cities.map(city=>el('li',{},el('strong',{},city.cityName??city.cityCode),el('span',{},`${city.arrivalDate} — ${city.departureDate}`)))));
     if(Object.keys(errors).length)panel.append(el('p',{class:'form-error'},Object.values(errors).join('；')));
   }
-  root.append(panel,el('p',{id:'save-error',class:'form-error',role:'alert',hidden:!state.error},state.error));
+  root.append(panel,el('p',{id:'save-error',class:'form-error error-summary',role:'alert','aria-live':'assertive',hidden:!state.error},state.error));
   const actions=el('div',{class:'form-actions'});
-  const discard=button('舍弃草稿',()=>controller.discard(),'text');discard.setAttribute('data-form-control','');actions.append(discard);
-  const right=el('div',{class:'step-actions'});
-  if(state.step!=='basic'){const previous=button('上一步',()=>controller.previous(),'secondary');previous.setAttribute('data-form-control','');right.append(previous);}
-  const next=button(state.step==='confirm'?'确认保存':'下一步',()=>state.step==='confirm'?controller.save():controller.next());next.setAttribute('data-form-control','');if(state.step==='confirm')next.setAttribute('data-pending-action','save');right.append(next);
-  if(state.error){const retry=button(state.hasPendingSave?'重试保存行程':'重试保存草稿',()=>state.hasPendingSave?controller.retrySave():controller.retryDraft(),'secondary');retry.setAttribute('data-form-control','');if(state.hasPendingSave)retry.setAttribute('data-pending-action','save');right.append(retry);}
+  const discard=button('舍弃草稿',()=>controller.discard(),'danger',{'data-state':'destructive'});discard.setAttribute('data-form-control','');actions.append(discard);
+  const right=actionGroup();right.className+=' step-actions';
+  if(state.step!=='basic'){const previous=button('上一步',()=>controller.previous(),'secondary',{'data-state':state.busy?'disabled':'ready'});previous.setAttribute('data-form-control','');right.append(previous);}
+  const next=button(state.busy?'正在处理…':state.step==='confirm'?'确认保存':'下一步',()=>state.step==='confirm'?controller.save():controller.next(),'primary',{'aria-busy':state.busy?'true':null,'data-state':state.busy?'busy':'ready'});next.setAttribute('data-form-control','');if(state.step==='confirm')next.setAttribute('data-pending-action','save');right.append(next);
+  if(state.error){const retry=button(state.hasPendingSave?'重试保存行程':'重试保存草稿',()=>state.hasPendingSave?controller.retrySave():controller.retryDraft(),'secondary',{'data-state':state.busy?'disabled':'ready'});retry.setAttribute('data-form-control','');if(state.hasPendingSave)retry.setAttribute('data-pending-action','save');right.append(retry);}
   actions.append(right);root.append(actions);root.querySelectorAll('[data-form-control]').forEach(node=>{if(state.busy||(state.hasPendingSave&&node.dataset.pendingAction!=='save'))node.disabled=true;});
   const first=Object.keys(errors)[0];if(first)root.querySelector(`[data-error-key="${first}"]`)?.focus();
 }

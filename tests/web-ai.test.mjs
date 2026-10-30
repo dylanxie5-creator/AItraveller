@@ -3,9 +3,8 @@ import assert from 'node:assert/strict';
 import {parseRoute,routeToHash} from '../src/web/router.mjs';
 import {createApiClient} from '../src/web/api-client.mjs';
 import {createAiController} from '../src/web/ai-controller.mjs';
-import {createAiPlanEditor} from '../src/web/ai-plan-editor.mjs';
-import {editorFieldId} from '../src/web/ai-plan-editor.mjs';
-import {buildSettingsCommand,defaultKeyAction,defaultSearchKeyAction,firstAiField,safeSourceUrl} from '../src/web/ai-views.mjs';
+import {createAiPlanEditor,editorFieldId,renderAiEditor} from '../src/web/ai-plan-editor.mjs';
+import {buildSettingsCommand,defaultKeyAction,defaultSearchKeyAction,firstAiField,renderAiView,safeSourceUrl} from '../src/web/ai-views.mjs';
 import {createQaAi,parseQaArguments} from '../scripts/start-ai-qa.mjs';
 import {setup} from './helpers/database.mjs';
 import {resolve} from 'node:path';
@@ -147,4 +146,28 @@ test('QA AI factory completes through fixed local fakes without external transpo
   await ai.jobs.settled();const finished=ai.jobs.get(job.id);
   assert.equal(finished.state,'succeeded');assert.equal(finished.searchCalls,2);assert.equal(finished.modelCalls,1);
   assert.deepEqual(ai.qaEvidence,{mode:'SIMULATED_NO_EXTERNAL_TRANSPORT',searchCalls:2,modelCalls:1});
+});
+
+class AiNode {
+  constructor(tag='',text=''){this.tag=tag;this.text=text;this.children=[];this.attrs={};this.className='';this.parentElement=null;this.disabled=false;this.dataset={};}
+  setAttribute(key,value){this.attrs[key]=String(value);if(['id','name','type','value'].includes(key))this[key]=String(value);if(key==='class')this.className=String(value);if(key.startsWith('data-'))this.dataset[key.slice(5).replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase())]=String(value);}
+  getAttribute(key){return this.attrs[key]??null;}addEventListener(){}
+  append(...items){for(const item of items.flat(Infinity)){const child=item instanceof AiNode?item:new AiNode('#text',String(item));child.parentElement=this;this.children.push(child);}}
+  prepend(...items){const next=[];for(const item of items.flat(Infinity)){const child=item instanceof AiNode?item:new AiNode('#text',String(item));child.parentElement=this;next.push(child);}this.children=[...next,...this.children];}
+  replaceChildren(...items){this.children=[];this.append(...items);}focus(){}
+  matches(selector){if(selector.startsWith('#'))return this.attrs.id===selector.slice(1);const typed=selector.match(/^(input)\[type=([^\]]+)\]$/);if(typed)return this.tag===typed[1]&&this.attrs.type===typed[2];if(['button','input','textarea','select','label'].includes(selector))return this.tag===selector;if(selector.startsWith('.'))return this.className.split(/\s+/).includes(selector.slice(1));if(selector.startsWith('[')){const match=selector.match(/^\[([^=\]]+)(?:="([^"]*)")?\]$/);return Boolean(match&&this.attrs[match[1]]!==undefined&&(match[2]===undefined||this.attrs[match[1]]===match[2]));}return false;}
+  all(){const result=[];(function walk(node){for(const child of node.children){result.push(child);walk(child);}})(this);return result;}
+  querySelector(selector){return this.all().find(node=>node.matches(selector))??null;}
+  querySelectorAll(selector){return this.all().filter(node=>selector.split(',').some(part=>node.matches(part.trim())));}
+}
+const aiText=node=>[node,...node.all()].filter(item=>item.tag==='#text').map(item=>item.text).join(' ');
+function controlHasLabel(root,control){return Boolean(control.attrs.id&&root.all().some(node=>node.tag==='label'&&node.attrs.for===control.attrs.id)||control.parentElement?.tag==='label'||control.attrs['aria-label']);}
+test('AI settings and plan editor share labeled controls and one primary action per group',()=>{
+  const priorNode=globalThis.Node,priorDocument=globalThis.document;globalThis.Node=AiNode;globalThis.document={createElement:tag=>new AiNode(tag),createTextNode:text=>new AiNode('#text',String(text))};
+  try{
+    const settingsRoot=new AiNode('main');renderAiView(settingsRoot,{type:'ai-settings',settings:settings(),busy:false,error:'',saved:false},{saveSettings(){}});
+    const planRoot=new AiNode('main'),plan={id:'plan-1',revision:1,content:content(),sources:[{sourceId:'s1',title:'来源'}],original:content()};renderAiEditor(planRoot,{plan,content:content(),dirty:true,busy:false,error:'',fields:{}},{change(){},save(){},navigate(){}});
+    for(const root of [settingsRoot,planRoot]){for(const control of root.all().filter(node=>['input','select','textarea'].includes(node.tag)))assert.equal(controlHasLabel(root,control),true,`${control.tag} ${control.attrs.id??control.attrs.name??''}`);const groups=root.all().filter(node=>node.className.includes('action-group'));assert.ok(groups.length>0);for(const group of groups)assert.ok(group.all().filter(node=>node.className.includes('primary')).length<=1);}
+    for(const label of ['保留','替换','明确删除'])assert.match(aiText(settingsRoot),new RegExp(label));assert.doesNotMatch(aiText(settingsRoot),/TEMP-KEY|QA-MODEL|QA-SEARCH/);
+  }finally{globalThis.Node=priorNode;globalThis.document=priorDocument;}
 });

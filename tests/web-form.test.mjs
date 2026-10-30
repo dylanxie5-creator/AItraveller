@@ -2,6 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';
 import {createFormController} from '../src/web/form-controller.mjs';
 import {createTripForm} from '../src/shared/trip-form-model.mjs';
 import {setup,prepare} from './helpers/database.mjs';import {input} from './helpers/fixtures.mjs';
+import {renderForm} from '../src/web/views.mjs';
 function editor(t,{apiOverride={},slot,render=()=>{}}={}) {
   const {service}=setup(t);const api={draft:async k=>service.getDraft(k),saveDraft:async(k,c)=>service.saveDraft(k,c),discardDraft:async(k,c)=>service.discardDraft(k,c),saveTrip:async(id,c)=>service.saveTrip(id,c),trip:async id=>service.getTrip(id),...apiOverride};
   const model=createTripForm({slot:slot??{targetTripId:'trip-1',baseTripRevision:0,step:'basic',input:input()}});const routes=[];let id=0;
@@ -69,4 +70,29 @@ test('disposed editor ignores late render while preserving completed storage wri
   const controller=createFormController({api:{saveDraft:async(k,c)=>{await gate;return service.saveDraft(k,c);}},model,draftKey:'new',slot:{key:'new',revision:0,state:'closed'},render:s=>rendered.push(s),navigate:()=>{},clock:{setTimeout:()=>1,clearTimeout:()=>{}},createId:()=> 'session-1'});
   const starting=controller.start();await Promise.resolve();controller.dispose();release();await starting;
   assert.equal(rendered.length,0);assert.equal(service.getDraft('new').state,'active');
+});
+
+class FormNode {
+  constructor(tag='',text=''){this.tag=tag;this.text=text;this.children=[];this.attrs={};this.className='';this.parentElement=null;this.disabled=false;this.dataset={};}
+  setAttribute(key,value){this.attrs[key]=String(value);if(key==='class')this.className=String(value);if(key.startsWith('data-'))this.dataset[key.slice(5).replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase())]=String(value);}
+  getAttribute(key){return this.attrs[key]??null;}addEventListener(){}
+  append(...items){for(const item of items){const child=item instanceof FormNode?item:new FormNode('#text',String(item));child.parentElement=this;this.children.push(child);}}
+  prepend(...items){const next=[];for(const item of items){const child=item instanceof FormNode?item:new FormNode('#text',String(item));child.parentElement=this;next.push(child);}this.children=[...next,...this.children];}
+  replaceChildren(...items){this.children=[];this.append(...items);}focus(){}
+  matches(selector){if(selector.startsWith('#'))return this.attrs.id===selector.slice(1);if(selector==='button'||selector==='input'||selector==='textarea'||selector==='select')return this.tag===selector;if(selector.startsWith('[')){const match=selector.match(/^\[([^=\]]+)(?:="([^"]*)")?\]$/);return Boolean(match&&this.attrs[match[1]]!==undefined&&(match[2]===undefined||this.attrs[match[1]]===match[2]));}return false;}
+  all(){const result=[];(function walk(node){for(const child of node.children){result.push(child);walk(child);}})(this);return result;}
+  querySelector(selector){return this.all().find(node=>node.matches(selector))??null;}
+  querySelectorAll(selector){return this.all().filter(node=>selector.split(',').some(part=>node.matches(part.trim())));}
+}
+const formText=root=>root.all().filter(node=>node.tag==='#text').map(node=>node.text).join(' ');
+test('trip form keeps one semantic stepper and distinguishes disabled busy and destructive actions',()=>{
+  const priorNode=globalThis.Node,priorDocument=globalThis.document;globalThis.Node=FormNode;globalThis.document={createElement:tag=>new FormNode(tag),createTextNode:text=>new FormNode('#text',String(text))};
+  try{
+    const root=new FormNode('main'),values=input(),controller={change(){},changeCity(){},addCity(){},moveCity(){},removeCity(){},discard(){},previous(){},next(){},save(){},retrySave(){},retryDraft(){}};
+    renderForm(root,{step:'basic',input:values,errors:{},busy:true,saved:false,dirty:true,error:'',hasPendingSave:false,baseTripRevision:0},controller,{cities:async()=>[]});
+    assert.equal(root.all().filter(node=>node.tag==='ol'&&node.className.includes('stepper')).length,1);for(const label of ['基本信息','城市路线','确认保存'])assert.match(formText(root),new RegExp(label));
+    for(const id of ['name','startDate','endDate','travelerCount','budgetYuan']){const control=root.querySelector(`#${id}`);assert.ok(control,id);assert.equal(control.getAttribute('aria-describedby'),`message-${id}`);}
+    const routeRoot=new FormNode('main');renderForm(routeRoot,{step:'route',input:values,errors:{},busy:false,saved:false,dirty:true,error:'',hasPendingSave:false,baseTripRevision:0},controller,{cities:async()=>[]});
+    const buttons=[...root.all(),...routeRoot.all()].filter(node=>node.tag==='button');assert.ok(buttons.some(node=>node.dataset.state==='busy'));assert.ok(buttons.some(node=>node.dataset.state==='destructive'));assert.ok(buttons.some(node=>node.dataset.state==='disabled'));
+  }finally{globalThis.Node=priorNode;globalThis.document=priorDocument;}
 });
