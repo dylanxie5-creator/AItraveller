@@ -3,6 +3,7 @@ import {actionGroup,button,el,fieldMessage,pageHeader,statusBadge,stepper} from 
 export {el,button} from './ui-elements.mjs';
 export function homeFootprintSummary(data) {const value=data?.footprints??{};const provinceCount=Number.isSafeInteger(value.provinceCount)?value.provinceCount:0,cityCount=Number.isSafeInteger(value.cityCount)?value.cityCount:0,visitCount=Number.isSafeInteger(value.visitCount)?value.visitCount:0;return {provinceCount,cityCount,visitCount,empty:visitCount===0,route:{type:'footprints'}};}
 export function tripCard(trip,actions) {return el('button',{class:'trip-card',type:'button',onClick:()=>actions.navigate({type:'detail',id:trip.id})},el('span',{class:`badge ${trip.status}`},trip.statusLabel),el('h3',{},trip.name),el('p',{class:'route-text'},trip.routeText),el('div',{class:'trip-meta'},el('span',{},`${trip.startDate} — ${trip.endDate}`),el('span',{},`${trip.travelerCount} 人 · ${trip.budgetText}`)));}
+function pdfDownloadAction(text,href) {return el('div',{class:'pdf-download-action','data-pdf-download-scope':''},el('a',{class:'button secondary',href,'data-pdf-download':'','aria-label':text},text),el('p',{class:'pdf-download-status','data-pdf-download-status':'',role:'status','aria-live':'polite'},'准备下载'),el('p',{class:'form-error','data-pdf-download-error':'',role:'alert',hidden:true}));}
 export function renderView(root,state,actions) {
   if(state.type==='delete-error'){const box=root.querySelector('[data-delete-error]');if(box){box.textContent=state.message;box.hidden=false;}return;}
   root.replaceChildren();
@@ -27,7 +28,7 @@ export function renderView(root,state,actions) {
     root.append(el('section',{class:'timeline-panel journal-section'},el('h2',{},'城市路线'),el('ol',{class:'timeline'},t.cities.map((city,i)=>el('li',{},el('span',{class:'city-number'},String(i+1).padStart(2,'0')),el('div',{},el('h3',{},city.cityName),el('p',{},`${city.arrivalDate} — ${city.departureDate}`),el('span',{class:'muted'},city.provinceName)))))));
     root.append(renderTripExpenseCard(state.expenseOverview,actions));
     if(state.guide)root.append(el('section',{class:'guide-link'},el('div',{},el('h2',{},'由 AI 攻略创建'),el('p',{},state.guide.status==='deleted'?'正式行程已删除，转换时的冻结快照仍保留。':'正式行程保存的是转换时快照；当前攻略可继续独立编辑。')),button('查看当前原攻略',()=>actions.navigate({type:'ai-plan',id:state.guide.planId}),'secondary')));
-    const archive=t.status==='completed'?el('a',{class:'button secondary',href:`#/reports/trips/${t.id}/print`,target:'_blank',rel:'noopener'},'导出行程档案'):null;
+    const archive=t.status==='completed'?pdfDownloadAction('下载行程档案 PDF',`/api/archive/trips/${encodeURIComponent(t.id)}.pdf`):null;
     root.append(el('p',{'data-delete-error':'',class:'form-error',hidden:true,role:'alert'}),...(t.status!=='completed'?[el('p',{class:'archive-eligibility'},'行程结束后可生成档案。')]:[]),actionGroup(archive,button('编辑行程',()=>actions.navigate({type:'edit',id:t.id}),'secondary'),button('删除行程',()=>actions.deleteTrip(t),'danger'),button('返回列表',()=>actions.navigate({type:'trips'}),'text')));
     const detailActions=root.children[root.children.length-1];detailActions.setAttribute('data-detail-actions','');detailActions.className+=' detail-actions';
   }

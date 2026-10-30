@@ -9,7 +9,7 @@ test('local startup serves all browser modules but not private project files',as
   const running=await startServer({dbPath:path,port:0});
   try {
     assert.equal(running.server.address().address,'127.0.0.1');
-    for(const route of ['/',...['styles.css','footprint-styles.css','archive-styles.css','app.mjs','ui-runtime.mjs','api-client.mjs','router.mjs','views.mjs','ui-elements.mjs','form-controller.mjs','expense-controller.mjs','expense-views.mjs','footprint-controller.mjs','footprint-views.mjs','data-controller.mjs','data-views.mjs','archive-controller.mjs','archive-views.mjs','amap-adapter.mjs','favicon.svg','icons.svg','travel-wash.png'].map(f=>'/web/'+f),...['date.mjs','money.mjs','trip-validation.mjs','trip-form-model.mjs','expense-form-model.mjs','footprint-form-model.mjs','footprint-format.mjs','trip-presenter.mjs'].map(f=>'/shared/'+f)]) {
+    for(const route of ['/',...['styles.css','footprint-styles.css','archive-styles.css','app.mjs','ui-runtime.mjs','pdf-download-runtime.mjs','api-client.mjs','router.mjs','views.mjs','ui-elements.mjs','form-controller.mjs','expense-controller.mjs','expense-views.mjs','footprint-controller.mjs','footprint-views.mjs','data-controller.mjs','data-views.mjs','archive-controller.mjs','archive-views.mjs','amap-adapter.mjs','favicon.svg','icons.svg','travel-wash.png'].map(f=>'/web/'+f),...['date.mjs','money.mjs','trip-validation.mjs','trip-form-model.mjs','expense-form-model.mjs','footprint-form-model.mjs','footprint-format.mjs','trip-presenter.mjs'].map(f=>'/shared/'+f)]) {
       const response=await request(running.url,{path:route});assert.equal(response.status,200,route);assert.ok(response.text.length>0,route);
     }
     assert.match((await request(running.url,{path:'/web/ui-elements.mjs'})).headers['content-type'],/^text\/javascript/);
@@ -20,6 +20,15 @@ test('local startup serves all browser modules but not private project files',as
     assert.match((await request(running.url,{path:'/'})).text,/href="\/web\/archive-styles\.css"/);
     for(const route of ['/','/web/styles.css','/web/footprint-styles.css','/web/archive-styles.css']){const text=(await request(running.url,{path:route})).text;assert.doesNotMatch(text,/(?:src|href)=["']https?:|url\(\s*["']?https?:/i,route);}
     for(const route of ['/runtime/travel.sqlite','/src/start.mjs','/storage/database.mjs','/.env','/package.json'])assert.equal((await request(running.url,{path:route})).status,404,route);
+  } finally {await running.close();}
+});
+
+test('served browser code contains no window.print print button or report DOM',async t=>{
+  const {path,database}=setup(t);database.close();const running=await startServer({dbPath:path,port:0});
+  try {
+    for(const route of ['/web/app.mjs','/web/router.mjs','/web/views.mjs','/web/archive-controller.mjs','/web/archive-views.mjs','/web/archive-styles.css']) {
+      const value=(await request(running.url,{path:route})).text;assert.doesNotMatch(value,/window\.print|打印\/保存为 PDF|archive-report|archive-document|archive-print-mode/u,route);
+    }
   } finally {await running.close();}
 });
 

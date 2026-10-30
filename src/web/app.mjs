@@ -16,9 +16,10 @@ import {renderDataView} from './data-views.mjs';
 import {createArchiveController} from './archive-controller.mjs';
 import {renderArchiveView} from './archive-views.mjs';
 import {createUiRuntime} from './ui-runtime.mjs';
+import {createPdfDownloadRuntime} from './pdf-download-runtime.mjs';
 import {presentTrip,orderTrips} from '../shared/trip-presenter.mjs';
 const footprintRoutes=new Set(['footprints','footprint-province','footprint-city','footprint-new','footprint-edit','footprint-manage','footprint-settings']);
-const archiveRoutes=new Set(['archive-home','archive-print','trip-archive-print']);
+const archiveRoutes=new Set(['archive-home']);
 
 export function navigationSection(route) {
   if(route.type==='home')return 'home';
@@ -66,6 +67,7 @@ export function createApp({api,render,navigate,confirm=()=>false,openEditor}) {
 if(typeof document!=='undefined') {
   const root=document.querySelector('#content');const api=createApiClient();let currentRoute=parseRoute(location.hash);
   const uiRuntime=createUiRuntime({document,window,root});
+  const pdfDownloadRuntime=createPdfDownloadRuntime({document});
   const refreshUi=()=>uiRuntime.refresh(navigationSection(currentRoute));
   const paint=callback=>{callback();refreshUi();};
   let editor=null,aiEditor=null,expenseController=null,dataController=null,archiveController=null,activeHash=location.hash,suppressHash=null,navigationQueue=Promise.resolve();
@@ -87,10 +89,9 @@ if(typeof document!=='undefined') {
   const footprints=createFootprintRuntime({api,root,navigate,confirm:message=>window.confirm(message),render:(target,state,actions)=>paint(()=>renderFootprintView(target,state,actions))});
   let restoredMessage='';try{restoredMessage=sessionStorage.getItem('data-restore-message')??'';sessionStorage.removeItem('data-restore-message');}catch{}
   const createData=()=>createDataController({api,initialMessage:restoredMessage,render:state=>paint(()=>renderDataView(root,state,dataController)),confirm:message=>window.confirm(message),download:url=>{const link=document.createElement('a');link.href=url;link.download='';document.body.append(link);link.click();link.remove();},reload:message=>{try{sessionStorage.setItem('data-restore-message',message);}catch{}location.reload();}});
-  const createArchive=()=>createArchiveController({api,render:state=>paint(()=>renderArchiveView(root,state,{print:()=>archiveController.print(),retry:route=>archiveController.load(route)})),print:()=>window.print()});
+  const createArchive=()=>createArchiveController({api,render:state=>paint(()=>renderArchiveView(root,state,{retry:route=>archiveController.load(route)}))});
   async function loadRoute(route) {
     currentRoute=route;
-    document.body.classList.toggle('archive-print-mode',['archive-print','trip-archive-print'].includes(route.type));
     if(route.type==='ai-plan-edit') {
       paint(()=>renderAiView(root,{type:'ai-loading',route},{}));
       try {
@@ -120,6 +121,6 @@ if(typeof document!=='undefined') {
     }).catch(()=>{});
   });
   window.addEventListener('beforeunload',event=>{if(hasPendingWrites([editor?.snapshot(),aiEditor?.snapshot(),expenseController?.snapshot(),dataController?.snapshot(),footprints.snapshot()])){event.preventDefault();event.returnValue='';}});
-  window.addEventListener('pagehide',()=>uiRuntime.dispose(),{once:true});
+  window.addEventListener('pagehide',()=>{pdfDownloadRuntime.dispose();uiRuntime.dispose();},{once:true});
   loadRoute(parseRoute(location.hash));
 }

@@ -21,10 +21,11 @@ test('footprint routes round trip only safe identities',()=>{
   for(const route of routes)assert.deepEqual(parseRoute(routeToHash(route)),route);
   for(const hash of ['#/footprints/cities/32%2F0100','#/footprints/visits/bad%2Fid/edit','#/footprints/provinces/123'])assert.deepEqual(parseRoute(hash),{type:'home'});
 });
-test('archive routes round trip only safe identities',()=>{
-  const routes=[{type:'archive-home'},{type:'archive-print'},{type:'trip-archive-print',id:'trip-1'}];
-  for(const route of routes)assert.deepEqual(parseRoute(routeToHash(route)),route);
-  for(const hash of ['#/reports/trips/bad%2Fid/print','#/reports/trips/%252e%252e/print','#/reports/trips/a.b/print'])assert.deepEqual(parseRoute(hash),{type:'home'});
+test('old report print hashes resolve to archive home and no print route round trips',()=>{
+  assert.deepEqual(parseRoute(routeToHash({type:'archive-home'})),{type:'archive-home'});
+  for(const hash of ['#/reports/archive/print','#/reports/trips/trip-1/print'])assert.deepEqual(parseRoute(hash),{type:'archive-home'});
+  for(const hash of ['#/reports/trips/bad%2Fid/print','#/reports/trips/%252e%252e/print','#/reports/trips/a.b/print'])assert.notEqual(parseRoute(hash).type,'trip-archive-print');
+  assert.equal(routeToHash({type:'archive-print'}).includes('/print'),false);assert.equal(routeToHash({type:'trip-archive-print',id:'trip-1'}).includes('/print'),false);
 });
 test('footprint navigation uses its own active destinations',()=>{
   assert.equal(navigationSection({type:'footprints'}),'footprints');
@@ -105,6 +106,6 @@ test('home and detail use one narrative hierarchy with ordered trip actions',()=
     assert.equal(homeNodes.filter(node=>node.tag==='button'&&node.className.includes('primary')&&textWithin(node).includes('新建行程')).length,1);assert.equal(homeNodes.filter(node=>node.attrs['data-journal-role']==='latest-trip').length,1);assert.equal(homeNodes.filter(node=>node.attrs['data-journal-role']==='footprint-band').length,1);assert.equal(homeNodes.filter(node=>node.attrs['data-journal-role']==='expense-band').length,1);
     for(const value of ['2','3','4'])assert.ok(homeNodes.some(node=>node.attrs['data-counter']===''&&textWithin(node)===value));
     const empty=new JournalNode('main');renderView(empty,{type:'home',data:{counts:{total:0,upcoming:0,ongoing:0,completed:0},expenses:{hasExpenses:false,totalCents:0},footprints:{provinceCount:0,cityCount:0,visitCount:0}},trip:null},actions);assert.doesNotMatch(journalText(empty),/示例|北京|上海/);
-    const detail=new JournalNode('main');renderView(detail,{type:'detail',trip,guide:null,expenseOverview:{trip,summary:{hasExpenses:false,totalCents:0,budgetCents:320050,budgetRemainingCents:320050,budgetState:'within',recentExpenses:[]}}},actions);const group=journalNodes(detail).find(node=>node.attrs['data-detail-actions']==='');assert.ok(group);assert.deepEqual(group.children.map(textWithin),['导出行程档案','编辑行程','删除行程','返回列表']);const danger=group.children.find(node=>textWithin(node)==='删除行程');assert.match(danger.className,/danger/);assert.doesNotMatch(danger.className,/primary/);assert.doesNotMatch(journalText(detail),/\bnull\b/);
+    const detail=new JournalNode('main');renderView(detail,{type:'detail',trip,guide:null,expenseOverview:{trip,summary:{hasExpenses:false,totalCents:0,budgetCents:320050,budgetRemainingCents:320050,budgetState:'within',recentExpenses:[]}}},actions);const group=journalNodes(detail).find(node=>node.attrs['data-detail-actions']==='');assert.ok(group);assert.deepEqual(group.children.map(textWithin),['下载行程档案 PDF 准备下载','编辑行程','删除行程','返回列表']);const danger=group.children.find(node=>textWithin(node)==='删除行程');assert.match(danger.className,/danger/);assert.doesNotMatch(danger.className,/primary/);assert.doesNotMatch(journalText(detail),/\bnull\b/);
   }finally{globalThis.Node=priorNode;globalThis.document=priorDocument;}
 });
