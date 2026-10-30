@@ -12,6 +12,7 @@ import {createMapSettingsStore} from '../storage/map-settings-store.mjs';
 import {createAmapProxy} from '../server/amap-proxy.mjs';
 import {createMutationCoordinator} from './mutation-coordinator.mjs';
 import {createArchiveService} from './archive-service.mjs';
+import {createArchivePdfService} from './archive-pdf-service.mjs';
 import {StoreError} from '../storage/errors.mjs';
 
 const nativeFiles={constants,copyFileSync,existsSync,renameSync,rmSync};
@@ -32,8 +33,9 @@ export function createDataRuntime({dbPath,aiFactory,protectorFactory=createDpapi
       ai=await aiFactory({database,signal});ai.jobs.recover();
       const footprints=createFootprintService({database});footprints.syncAll();
       const protector=protectorFactory(),mapSettings=createMapSettingsStore(database,{protector});
+      const archives=createArchiveService({database}),archivePdf=createArchivePdfService({archives});
       return {
-        database,service:createTravelService({database}),expenses:createExpenseService({database}),footprints,archives:createArchiveService({database}),
+        database,service:createTravelService({database}),expenses:createExpenseService({database}),footprints,archives,archivePdf,
         mapSettings,amapProxy:createAmapProxy({settingsStore:mapSettings}),
         ai,backups,coordinator,
       };

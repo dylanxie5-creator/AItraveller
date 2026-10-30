@@ -46,9 +46,9 @@ export async function startServer({dbPath=fileURLToPath(new URL('../runtime/trav
   });
   try {
     guard();runtime=createDataRuntime({dbPath,aiFactory,protectorFactory:createDpapiProtector});await runtime.start({signal:controller.signal});guard();
-    const {service,expenses,footprints,archives,mapSettings,amapProxy,ai}=runtime.current();
+    const {service,expenses,footprints,archives,archivePdf,mapSettings,amapProxy,ai}=runtime.current();
     await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,()=>{server.off('error',reject);resolve();});});guard();
-    const actual=server.address().port;const app=createHttpApp({runtime,service,expenses,footprints,archives,mapSettings,amapProxy,ai,allowedHosts:[`127.0.0.1:${actual}`,`localhost:${actual}`],...(uploadDirectory?{uploadDirectory}:{}),...(uploadLimit?{uploadLimit}:{})});
+    const actual=server.address().port;const app=createHttpApp({runtime,service,expenses,footprints,archives,archivePdf,mapSettings,amapProxy,ai,allowedHosts:[`127.0.0.1:${actual}`,`localhost:${actual}`],...(uploadDirectory?{uploadDirectory}:{}),...(uploadLimit?{uploadLimit}:{})});
     server.on('request',(request,response)=>{
       if(ownershipLost||closing){response.writeHead(503);response.end();return;}
       app(request,response);

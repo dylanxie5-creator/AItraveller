@@ -16,7 +16,7 @@ async function app(t) {
 test('archive GET endpoints return sanitized completed reports without write coordination',async t=>{
   const c=await app(t),total=await request(c.url,{path:'/api/archive'}),single=await request(c.url,{path:'/api/archive/trips/trip-completed'});
   assert.equal(total.status,200);assert.equal(single.status,200);assert.equal(total.json.data.summary.tripCount,1);assert.equal(single.json.data.trip.name,'已结束行程');
-  assert.equal(total.headers['cache-control'],'no-store');assert.equal(total.headers['access-control-allow-origin'],undefined);assert.equal(c.writes,0);
+  assert.equal(total.headers['cache-control'],'no-store');assert.match(total.headers['content-type'],/^application\/json/u);assert.equal(total.headers['content-disposition'],undefined);assert.equal(total.headers['access-control-allow-origin'],undefined);assert.equal(c.writes,0);
   const text=single.text;for(const forbidden of ['trip-completed','expense-archive','visit-archive','plan-archive','apiKey','keyCipher','securityCipher','C:\\','SELECT '])assert.equal(text.includes(forbidden),false,forbidden);
 });
 

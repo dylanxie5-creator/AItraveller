@@ -7,15 +7,19 @@ import {routeFootprintApi} from './footprint-api-router.mjs';
 import {routeMapApi} from './map-api-router.mjs';
 import {routeDataApi} from './data-api-router.mjs';
 import {routeArchiveApi} from './archive-api-router.mjs';
+import {PDF_LIMIT_BYTES} from '../archive/pdf-runtime.mjs';
+import {StoreError} from '../storage/errors.mjs';
 import {createReadStream,rmSync} from 'node:fs';
 import {pipeline} from 'node:stream/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-const statusByCode={NOT_FOUND:404,CONFLICT:409,ARCHIVE_NOT_COMPLETED:409,CATEGORY_IN_USE:409,AUTO_VISIT_REQUIRES_SUPPRESSION:409,MAP_CONFIGURATION_REQUIRED:409,MAP_CREDENTIALS_UNAVAILABLE:503,VALIDATION:422,DATA_BACKUP_INVALID:422,DATA_BACKUP_FAILED:503,DATA_RESTORE_FAILED:503,DATA_RESTORE_ROLLBACK_FAILED:503,DATA_RESTORE_IN_PROGRESS:503,STORAGE_CORRUPT:503,STORAGE_VERSION:503};
+const statusByCode={NOT_FOUND:404,CONFLICT:409,ARCHIVE_NOT_COMPLETED:409,ARCHIVE_EMPTY:409,PDF_TOO_LARGE:413,PDF_FONT_UNAVAILABLE:503,PDF_GENERATION_FAILED:503,CATEGORY_IN_USE:409,AUTO_VISIT_REQUIRES_SUPPRESSION:409,MAP_CONFIGURATION_REQUIRED:409,MAP_CREDENTIALS_UNAVAILABLE:503,VALIDATION:422,DATA_BACKUP_INVALID:422,DATA_BACKUP_FAILED:503,DATA_RESTORE_FAILED:503,DATA_RESTORE_ROLLBACK_FAILED:503,DATA_RESTORE_IN_PROGRESS:503,STORAGE_CORRUPT:503,STORAGE_VERSION:503};
 const aiMessages={AI_CREDENTIALS_UNAVAILABLE:'已保存的密钥无法读取，请重新配置',AI_KEY_REQUIRED:'请先完成所选模型和搜索密钥配置',AI_AUTH:'平台鉴权失败，请检查 API Key',AI_RATE_LIMIT:'平台请求受限，请稍后手动重试',AI_TIMEOUT:'平台请求超时，请手动重试',AI_CANCELLED:'AI 请求已取消',AI_ENDPOINT_BLOCKED:'接口地址不安全',AI_RESPONSE:'平台响应无效',AI_SEARCH_RESPONSE:'检索资料响应无效',AI_SEARCH_EMPTY:'未检索到有效资料',AI_NETWORK:'无法连接外部平台',AI_MODEL_RESPONSE:'模型未返回可用攻略',AI_MODEL_TRUNCATED:'模型输出被截断',AI_MODEL_JSON:'模型未返回有效攻略格式'};
 const dataMessages={DATA_BACKUP_INVALID:'备份文件已损坏或不完整',DATA_BACKUP_FAILED:'无法创建完整的数据备份',DATA_RESTORE_FAILED:'无法恢复数据，原数据已保留',DATA_RESTORE_ROLLBACK_FAILED:'恢复未完成，请重新启动网站后检查数据',DATA_RESTORE_IN_PROGRESS:'正在恢复数据，请稍后重试'};
-export function createHttpApp({runtime,service,expenses,footprints,archives,mapSettings,amapProxy,ai,webRoot,sharedRoot,allowedHosts,uploadDirectory=join(tmpdir(),'travel-trace-imports'),uploadLimit=268435456}) {
-  const fixed={service,expenses,footprints,archives,mapSettings,amapProxy,ai};
+const pdfMessages={ARCHIVE_EMPTY:'还没有已经结束的行程',PDF_FONT_UNAVAILABLE:'当前电脑缺少生成中文 PDF 所需的字体',PDF_GENERATION_FAILED:'暂时无法生成 PDF，请重试',PDF_TOO_LARGE:'PDF 内容过多，无法生成单个文件'};
+const rfc5987=value=>encodeURIComponent(value).replace(/['()*]/gu,character=>`%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+export function createHttpApp({runtime,service,expenses,footprints,archives,archivePdf,mapSettings,amapProxy,ai,webRoot,sharedRoot,allowedHosts,uploadDirectory=join(tmpdir(),'travel-trace-imports'),uploadLimit=268435456}) {
+  const fixed={service,expenses,footprints,archives,archivePdf,mapSettings,amapProxy,ai};
   return async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer');
     res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-eval' https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline' https://*.amap.com; img-src 'self' data: blob: https://*.amap.com; connect-src 'self' https://*.amap.com; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
@@ -28,7 +32,7 @@ export function createHttpApp({runtime,service,expenses,footprints,archives,mapS
       if(path.includes('..')||path.includes('\\')||path.includes('%')||path.includes('\0'))throw new HttpError(404,'NOT_FOUND','页面不存在');
       const query=new URL(req.url,`http://${req.headers.host}`).searchParams;
       const dispatch=async()=>{
-        const current=runtime?.current()??fixed,{service,expenses,footprints,archives,mapSettings,amapProxy,ai}=current;
+        const current=runtime?.current()??fixed,{service,expenses,footprints,archives,archivePdf,mapSettings,amapProxy,ai}=current;
         if(path.startsWith('/_AMapService/')){if(!amapProxy)throw new HttpError(404,'NOT_FOUND','地图接口不存在');const result=await amapProxy.handle({method:req.method,path,searchParams:query});res.writeHead(result.status,{'Content-Type':result.contentType});res.end(result.body);return;}
         if(path==='/api/data/backups/import'&&req.method==='POST'){
           if(!runtime)throw new HttpError(404,'NOT_FOUND','页面或记录不存在');const upload=await streamUpload(req,{directory:uploadDirectory,maxBytes:uploadLimit});
@@ -36,7 +40,17 @@ export function createHttpApp({runtime,service,expenses,footprints,archives,mapS
         }
         if(path==='/api/data/backups'||path.startsWith('/api/data/backups/')){if(!runtime)throw new HttpError(404,'NOT_FOUND','页面或记录不存在');const body=req.method==='GET'?undefined:await readJson(req);const result=await routeDataApi(runtime,req.method,path,body);if(result.download){res.writeHead(result.status,{'Content-Type':'application/vnd.sqlite3','Content-Disposition':`attachment; filename="${result.download.filename}"`,'Content-Length':result.download.sizeBytes,'Cache-Control':'no-store'});await pipeline(createReadStream(result.download.path),res);return;}json(result.status,{data:result.data});return;}
         if(path==='/api/map-settings'||path==='/api/map-session'){if(!mapSettings)throw new HttpError(404,'NOT_FOUND','页面或记录不存在');const body=req.method==='GET'?undefined:await readJson(req);const result=await routeMapApi(mapSettings,req.method,path,body);json(result.status,{data:result.data});return;}
-        if(path==='/api/archive'||path.startsWith('/api/archive/')){if(!archives)throw new HttpError(404,'NOT_FOUND','页面或记录不存在');const result=routeArchiveApi(archives,req.method,path);json(result.status,{data:result.data});return;}
+        if(path==='/api/archive'||path==='/api/archive.pdf'||path.startsWith('/api/archive/')){
+          if(!archives)throw new HttpError(404,'NOT_FOUND','页面或记录不存在');const result=await routeArchiveApi({archives,archivePdf},req.method,path);
+          if(result.download){
+            const {filename,body}=result.download;
+            if(!Buffer.isBuffer(body)||body.length<5||body.subarray(0,5).toString('ascii')!=='%PDF-')throw new StoreError('PDF_GENERATION_FAILED',pdfMessages.PDF_GENERATION_FAILED);
+            if(body.length>PDF_LIMIT_BYTES)throw new StoreError('PDF_TOO_LARGE',pdfMessages.PDF_TOO_LARGE);
+            const fallback=path==='/api/archive.pdf'?'travel-archive.pdf':'trip-archive.pdf';
+            res.writeHead(result.status,{'Content-Type':'application/pdf','Content-Disposition':`attachment; filename="${fallback}"; filename*=UTF-8''${rfc5987(String(filename??fallback))}`,'Content-Length':body.length,'Cache-Control':'no-store'});res.end(body);return;
+          }
+          json(result.status,{data:result.data});return;
+        }
         if(path.startsWith('/api/ai/')){if(!ai)throw new HttpError(404,'NOT_FOUND','页面或记录不存在');const body=req.method==='GET'?undefined:await readJson(req);const result=await routeAiApi(ai,req.method,path,body);json(result.status,{data:result.data});return;}
         if(path==='/api/footprints'||path.startsWith('/api/footprints/')){if(!footprints)throw new HttpError(404,'NOT_FOUND','页面或记录不存在');const body=req.method==='GET'?undefined:await readJson(req);const result=routeFootprintApi(footprints,req.method,path,body);json(result.status,{data:result.data});return;}
         if(/^\/api\/trips\/[a-zA-Z0-9_-]{1,80}\/(?:expenses|expense-categories)(?:\/|$)/.test(path)){if(!expenses)throw new HttpError(404,'NOT_FOUND','页面或记录不存在');const body=req.method==='GET'?undefined:await readJson(req);const result=routeExpenseApi(expenses,req.method,path,body);json(result.status,{data:result.data});return;}
@@ -49,8 +63,8 @@ export function createHttpApp({runtime,service,expenses,footprints,archives,mapS
       if(runtime&&!['GET','HEAD'].includes(req.method)&&!restoreRequest)await runtime.coordinator.runWrite(dispatch);else await dispatch();
     }catch(error){
       if(res.headersSent){res.destroy();return;}
-      const knownAi=Object.hasOwn(aiMessages,error.code),knownData=Object.hasOwn(dataMessages,error.code),status=error.status??statusByCode[error.code]??503;
-      const safe=knownAi?{code:error.code,message:aiMessages[error.code]}:knownData?{code:error.code,message:dataMessages[error.code]}:status===503&&!statusByCode[error.code]?{code:'STORAGE_FAILED',message:'本机服务暂时无法完成操作，请重试'}:{code:error.code??'STORAGE_FAILED',message:error.message, ...(error.fields?{fields:error.fields}:{})};
+      const knownAi=Object.hasOwn(aiMessages,error.code),knownData=Object.hasOwn(dataMessages,error.code),knownPdf=Object.hasOwn(pdfMessages,error.code),status=error.status??statusByCode[error.code]??503;
+      const safe=knownAi?{code:error.code,message:aiMessages[error.code]}:knownData?{code:error.code,message:dataMessages[error.code]}:knownPdf?{code:error.code,message:pdfMessages[error.code]}:status===503&&!statusByCode[error.code]?{code:'STORAGE_FAILED',message:'本机服务暂时无法完成操作，请重试'}:{code:error.code??'STORAGE_FAILED',message:error.message, ...(error.fields?{fields:error.fields}:{})};
       json(status,{error:safe});
     }
   };
