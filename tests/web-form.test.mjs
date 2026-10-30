@@ -83,6 +83,8 @@ class FormNode {
   all(){const result=[];(function walk(node){for(const child of node.children){result.push(child);walk(child);}})(this);return result;}
   querySelector(selector){return this.all().find(node=>node.matches(selector))??null;}
   querySelectorAll(selector){return this.all().filter(node=>selector.split(',').some(part=>node.matches(part.trim())));}
+  get textContent(){return this.tag==='#text'?this.text:this.children.map(child=>child.textContent).join('');}
+  set textContent(value){this.text=this.tag==='#text'?String(value):this.text;this.children=this.tag==='#text'?this.children:[new FormNode('#text',String(value))];}
 }
 const formText=root=>root.all().filter(node=>node.tag==='#text').map(node=>node.text).join(' ');
 test('trip form keeps one semantic stepper and distinguishes disabled busy and destructive actions',()=>{
@@ -92,7 +94,8 @@ test('trip form keeps one semantic stepper and distinguishes disabled busy and d
     renderForm(root,{step:'basic',input:values,errors:{},busy:true,saved:false,dirty:true,error:'',hasPendingSave:false,baseTripRevision:0},controller,{cities:async()=>[]});
     assert.equal(root.all().filter(node=>node.tag==='ol'&&node.className.includes('stepper')).length,1);for(const label of ['基本信息','城市路线','确认保存'])assert.match(formText(root),new RegExp(label));
     for(const id of ['name','startDate','endDate','travelerCount','budgetYuan']){const control=root.querySelector(`#${id}`);assert.ok(control,id);assert.equal(control.getAttribute('aria-describedby'),`message-${id}`);}
+    assert.ok(root.all().some(node=>node.tag==='button'&&node.dataset.state==='busy'));renderForm(root,{step:'basic',input:values,errors:{name:'请填写行程名称'},busy:false,saved:true,dirty:false,error:'',hasPendingSave:false,baseTripRevision:0},controller,{cities:async()=>[]},{full:false});const next=root.querySelector('[data-form-next]');assert.equal(next.textContent,'下一步');assert.equal(next.dataset.state,'ready');assert.equal(next.getAttribute('aria-busy'),'false');
     const routeRoot=new FormNode('main');renderForm(routeRoot,{step:'route',input:values,errors:{},busy:false,saved:false,dirty:true,error:'',hasPendingSave:false,baseTripRevision:0},controller,{cities:async()=>[]});
-    const buttons=[...root.all(),...routeRoot.all()].filter(node=>node.tag==='button');assert.ok(buttons.some(node=>node.dataset.state==='busy'));assert.ok(buttons.some(node=>node.dataset.state==='destructive'));assert.ok(buttons.some(node=>node.dataset.state==='disabled'));
+    const buttons=[...root.all(),...routeRoot.all()].filter(node=>node.tag==='button');assert.ok(buttons.some(node=>node.dataset.state==='destructive'));assert.ok(buttons.some(node=>node.dataset.state==='disabled'));
   }finally{globalThis.Node=priorNode;globalThis.document=priorDocument;}
 });

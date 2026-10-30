@@ -28,7 +28,7 @@ export function renderView(root,state,actions) {
     root.append(renderTripExpenseCard(state.expenseOverview,actions));
     if(state.guide)root.append(el('section',{class:'guide-link'},el('div',{},el('h2',{},'由 AI 攻略创建'),el('p',{},state.guide.status==='deleted'?'正式行程已删除，转换时的冻结快照仍保留。':'正式行程保存的是转换时快照；当前攻略可继续独立编辑。')),button('查看当前原攻略',()=>actions.navigate({type:'ai-plan',id:state.guide.planId}),'secondary')));
     const archive=t.status==='completed'?el('a',{class:'button secondary',href:`#/reports/trips/${t.id}/print`,target:'_blank',rel:'noopener'},'导出行程档案'):null;
-    root.append(el('p',{'data-delete-error':'',class:'form-error',hidden:true,role:'alert'}),t.status!=='completed'?el('p',{class:'archive-eligibility'},'行程结束后可生成档案。'):null,actionGroup(archive,button('编辑行程',()=>actions.navigate({type:'edit',id:t.id}),'secondary'),button('删除行程',()=>actions.deleteTrip(t),'danger'),button('返回列表',()=>actions.navigate({type:'trips'}),'text')));
+    root.append(el('p',{'data-delete-error':'',class:'form-error',hidden:true,role:'alert'}),...(t.status!=='completed'?[el('p',{class:'archive-eligibility'},'行程结束后可生成档案。')]:[]),actionGroup(archive,button('编辑行程',()=>actions.navigate({type:'edit',id:t.id}),'secondary'),button('删除行程',()=>actions.deleteTrip(t),'danger'),button('返回列表',()=>actions.navigate({type:'trips'}),'text')));
     const detailActions=root.children[root.children.length-1];detailActions.setAttribute('data-detail-actions','');detailActions.className+=' detail-actions';
   }
 }
@@ -41,6 +41,7 @@ export function renderForm(root,state,controller,api,{full=true}={}) {
     const error=root.querySelector('#save-error');error.textContent=state.error;error.hidden=!state.error;
     root.querySelectorAll('[data-form-control]').forEach(node=>node.disabled=state.busy||(state.hasPendingSave&&node.dataset.pendingAction!=='save'));
     root.querySelectorAll('[data-field-error]').forEach(node=>{const text=state.errors[node.dataset.fieldError]??'';node.textContent=text;node.hidden=!text;});
+    const next=root.querySelector('[data-form-next]');if(next){next.textContent=state.busy?'正在处理…':state.step==='confirm'?'确认保存':'下一步';next.setAttribute('aria-busy',String(state.busy));next.setAttribute('data-state',state.busy?'busy':'ready');}
     return;
   }
   root.replaceChildren();const steps=['basic','route','confirm'];
@@ -83,7 +84,7 @@ export function renderForm(root,state,controller,api,{full=true}={}) {
   const discard=button('舍弃草稿',()=>controller.discard(),'danger',{'data-state':'destructive'});discard.setAttribute('data-form-control','');actions.append(discard);
   const right=actionGroup();right.className+=' step-actions';
   if(state.step!=='basic'){const previous=button('上一步',()=>controller.previous(),'secondary',{'data-state':state.busy?'disabled':'ready'});previous.setAttribute('data-form-control','');right.append(previous);}
-  const next=button(state.busy?'正在处理…':state.step==='confirm'?'确认保存':'下一步',()=>state.step==='confirm'?controller.save():controller.next(),'primary',{'aria-busy':state.busy?'true':null,'data-state':state.busy?'busy':'ready'});next.setAttribute('data-form-control','');if(state.step==='confirm')next.setAttribute('data-pending-action','save');right.append(next);
+  const next=button(state.busy?'正在处理…':state.step==='confirm'?'确认保存':'下一步',()=>state.step==='confirm'?controller.save():controller.next(),'primary',{'aria-busy':String(state.busy),'data-state':state.busy?'busy':'ready','data-form-next':''});next.setAttribute('data-form-control','');if(state.step==='confirm')next.setAttribute('data-pending-action','save');right.append(next);
   if(state.error){const retry=button(state.hasPendingSave?'重试保存行程':'重试保存草稿',()=>state.hasPendingSave?controller.retrySave():controller.retryDraft(),'secondary',{'data-state':state.busy?'disabled':'ready'});retry.setAttribute('data-form-control','');if(state.hasPendingSave)retry.setAttribute('data-pending-action','save');right.append(retry);}
   actions.append(right);root.append(actions);root.querySelectorAll('[data-form-control]').forEach(node=>{if(state.busy||(state.hasPendingSave&&node.dataset.pendingAction!=='save'))node.disabled=true;});
   const first=Object.keys(errors)[0];if(first)root.querySelector(`[data-error-key="${first}"]`)?.focus();

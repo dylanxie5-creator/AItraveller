@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {actionGroup,button,fieldMessage,icon,pageHeader,statusBadge,stepper} from '../src/web/ui-elements.mjs';
 import {createUiRuntime} from '../src/web/ui-runtime.mjs';
+import {readFileSync} from 'node:fs';
 
 class FakeNode {
   constructor(tag='',text='') {
@@ -63,11 +64,11 @@ class EventTargetFake {
   listenerCount(type){return (this.listeners.get(type)??[]).length;}
 }
 class RuntimeNode extends EventTargetFake {
-  constructor(name,owner){super();this.name=name;this.owner=owner;this.attrs={};this.dataset={};this.hidden=false;this.textContent='';this.nodes=new Map();this.style={values:new Map(),setProperty:(name,value)=>this.style.values.set(name,value)};this.classList={values:new Set(),add:(...names)=>names.forEach(name=>this.classList.values.add(name)),remove:(...names)=>names.forEach(name=>this.classList.values.delete(name)),toggle:(name,force)=>{const active=force??!this.classList.values.has(name);active?this.classList.values.add(name):this.classList.values.delete(name);return active;}};}
+  constructor(name,owner){super();this.name=name;this.owner=owner;this.attrs={};this.dataset={};this.hidden=false;this.textContent='';this.focusCount=0;this.nodes=new Map();this.style={values:new Map(),setProperty:(name,value)=>this.style.values.set(name,value)};this.classList={values:new Set(),add:(...names)=>names.forEach(name=>this.classList.values.add(name)),remove:(...names)=>names.forEach(name=>this.classList.values.delete(name)),toggle:(name,force)=>{const active=force??!this.classList.values.has(name);active?this.classList.values.add(name):this.classList.values.delete(name);return active;}};}
   setAttribute(name,value){this.attrs[name]=String(value);if(name.startsWith('data-'))this.dataset[name.slice(5).replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase())]=String(value);}
   getAttribute(name){return this.attrs[name]??null;}
   removeAttribute(name){delete this.attrs[name];}
-  focus(){this.owner.activeElement=this;}
+  focus(){this.focusCount++;this.owner.activeElement=this;}
   querySelector(selector){return (this.nodes.get(selector)??[])[0]??null;}
   querySelectorAll(selector){return this.nodes.get(selector)??[];}
 }
@@ -77,7 +78,7 @@ class RuntimeDocument extends EventTargetFake {
   querySelectorAll(selector){return this.nodes.get(selector)??[];}
 }
 function runtimeFixture({reduced=false,coarse=false}={}) {
-  const document=new RuntimeDocument(),window=new EventTargetFake();window.location={hash:'#/trips'};window.matchMedia=query=>({matches:query.includes('reduced-motion')?reduced:coarse});window.requestAnimationFrame=callback=>{callback();return 1;};
+  const document=new RuntimeDocument(),window=new EventTargetFake();window.location={hash:'#/trips'};window.matchMedia=query=>({matches:query.includes('reduced-motion')?reduced:coarse});window.rafCalls=0;window.requestAnimationFrame=callback=>{window.rafCalls++;callback();return window.rafCalls;};
   const make=name=>new RuntimeNode(name,document),root=make('root'),heading=make('heading'),home=make('home'),mobileHome=make('mobile-home'),trips=make('trips'),more=make('more'),drawer=make('drawer'),backdrop=make('backdrop'),close=make('close'),skip=make('skip'),first=make('first'),last=make('last'),spotlight=make('spotlight'),counter=make('counter');
   home.dataset.nav='home';mobileHome.dataset.nav='home';trips.dataset.nav='trips';more.dataset.nav='more';drawer.hidden=true;backdrop.hidden=true;counter.dataset.counter='7';counter.textContent='7';
   document.nodes.set('[data-nav]',[home,mobileHome,trips,more]);document.nodes.set('[data-mobile-more]',[more]);document.nodes.set('[data-more-drawer]',[drawer]);document.nodes.set('[data-more-backdrop]',[backdrop]);document.nodes.set('[data-more-close]',[close]);document.nodes.set('[data-skip-link]',[skip]);drawer.nodes.set('[data-more-focusable]',[first,last]);root.nodes.set('[data-spotlight]',[spotlight]);root.nodes.set('[data-counter]',[counter]);root.nodes.set('h1',[heading]);
@@ -108,4 +109,13 @@ test('reduced motion and coarse pointer keep content visible without pointer tra
 
 test('dispose removes global listeners and late refresh has no effect',()=>{
   const fixture=runtimeFixture(),runtime=createUiRuntime(fixture);runtime.refresh('home');assert.equal(fixture.document.listenerCount('keydown'),1);runtime.dispose();assert.equal(fixture.document.listenerCount('keydown'),0);runtime.refresh('trips');assert.equal(fixture.home.getAttribute('aria-current'),'page');assert.equal(fixture.trips.getAttribute('aria-current'),null);
+});
+
+test('route refresh keeps one h1 focus target and no duplicate runtime listeners',()=>{
+  const fixture=runtimeFixture(),runtime=createUiRuntime(fixture);fixture.heading.textContent='旅行概览';runtime.refresh('home');const initialRafCalls=fixture.window.rafCalls;runtime.refresh('home');assert.equal(fixture.heading.focusCount,1);assert.equal(fixture.window.rafCalls,initialRafCalls);fixture.heading.textContent='我的行程';runtime.refresh('home');assert.equal(fixture.heading.focusCount,2);assert.equal(fixture.window.rafCalls,initialRafCalls+1);assert.equal(fixture.spotlight.listenerCount('pointermove'),1);runtime.dispose();
+});
+
+test('narrow layout reserves bottom navigation space and wraps long content',()=>{
+  const css=readFileSync(new URL('../src/web/styles.css',import.meta.url),'utf8'),block=css.match(/@media\s*\(max-width:390px\)\{([\s\S]*)\}\s*$/)?.[1]??'';
+  for(const selector of ['.workspace','main','.detail-actions','.action-group'])assert.ok(block.includes(selector),selector);assert.match(block,/safe-area-inset-bottom/);assert.match(block,/overflow-wrap:anywhere|word-break:break-word/);assert.doesNotMatch(block,/overflow-x:\s*auto/);
 });

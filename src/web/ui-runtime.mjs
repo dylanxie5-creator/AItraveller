@@ -55,9 +55,9 @@ export function createUiRuntime({document,window,root,raf=window.requestAnimatio
     }
     for(const node of root.querySelectorAll('[data-spotlight]'))enhanceSpotlight(node);
     for(const node of root.querySelectorAll('[data-counter]'))enhanceCounter(node);
-    const heading=root.querySelector('h1'),identity=`${section}:${heading?.textContent??''}`;
-    if(identity!==lastRouteIdentity){lastRouteIdentity=identity;if(heading){heading.setAttribute('tabindex','-1');heading.focus();}}
-    if(!reduced&&!coarse){root.classList.remove('route-entering');raf(()=>{if(!disposed)root.classList.add('route-entering');});}
+    const heading=root.querySelector('h1'),identity=`${section}:${heading?.textContent??''}`,routeChanged=identity!==lastRouteIdentity;
+    if(routeChanged){lastRouteIdentity=identity;if(heading){heading.setAttribute('tabindex','-1');heading.focus();}}
+    if(routeChanged&&!reduced&&!coarse){root.classList.remove('route-entering');raf(()=>{if(!disposed)root.classList.add('route-entering');});}
   }
   function dispose() {
     if(disposed)return;

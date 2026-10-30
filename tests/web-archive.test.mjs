@@ -86,3 +86,8 @@ test('archive landing names its preview while print DOM excludes screen runtime 
   const landing=new FakeNode('main');renderArchiveView(landing,{type:'archive-home',route:{type:'archive-home'},report:totalReport()},{print(){},retry(){}});const landingNodes=nodes(landing),preview=landingNodes.find(node=>node.tag==='a'&&node.attrs.href==='#/reports/archive/print');assert.ok(landingNodes.some(node=>node.tag==='h1'&&textOf(node).includes('旅行档案')));assert.ok(preview);assert.match(textOf(preview),/预览旅行总档案/);assert.ok(landingNodes.some(node=>node.className.includes('archive-yearbook-cover')));
   const print=new FakeNode('main');renderArchiveView(print,{type:'archive-report',route:{type:'archive-print'},report:totalReport()},{print(){},retry(){}});const printNodes=nodes(print);for(const node of printNodes){assert.equal(Object.hasOwn(node.attrs,'data-spotlight'),false);assert.equal(Object.hasOwn(node.attrs,'data-counter'),false);assert.notEqual(node.attrs.src,'/web/travel-wash.png');}
 }));
+
+test('print mode removes every interactive and decorative layer',()=>{
+  const css=readFileSync(new URL('../src/web/archive-styles.css',import.meta.url),'utf8'),print=[...css.matchAll(/@media\s+print\s*\{([\s\S]*?)\}\s*(?=@media|body\.|$)/g)].map(match=>match[1]).join(' ');
+  for(const selector of ['.skip-link','.sidebar','.mobile-navigation','.more-drawer','.topbar','.page-footer','.travel-wash'])assert.ok(print.includes(selector),selector);assert.match(print,/\[data-spotlight\].*display:none/s);assert.match(print,/\.archive-document/);assert.match(css,/@page\s*\{[^}]*size:\s*A4 portrait/s);
+});

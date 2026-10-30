@@ -18,6 +18,7 @@ test('local startup serves all browser modules but not private project files',as
     assert.match((await request(running.url,{path:'/'})).text,/href="#\/data"[^>]*data-nav="data"/);
     assert.match((await request(running.url,{path:'/'})).text,/href="#\/archive"[^>]*data-nav="archive"/);
     assert.match((await request(running.url,{path:'/'})).text,/href="\/web\/archive-styles\.css"/);
+    for(const route of ['/','/web/styles.css','/web/footprint-styles.css','/web/archive-styles.css']){const text=(await request(running.url,{path:route})).text;assert.doesNotMatch(text,/(?:src|href)=["']https?:|url\(\s*["']?https?:/i,route);}
     for(const route of ['/runtime/travel.sqlite','/src/start.mjs','/storage/database.mjs','/.env','/package.json'])assert.equal((await request(running.url,{path:route})).status,404,route);
   } finally {await running.close();}
 });
