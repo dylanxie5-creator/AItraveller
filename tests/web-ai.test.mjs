@@ -171,3 +171,11 @@ test('AI settings and plan editor share labeled controls and one primary action 
     for(const label of ['保留','替换','明确删除'])assert.match(aiText(settingsRoot),new RegExp(label));assert.doesNotMatch(aiText(settingsRoot),/TEMP-KEY|QA-MODEL|QA-SEARCH/);
   }finally{globalThis.Node=priorNode;globalThis.document=priorDocument;}
 });
+
+test('AI job plan and source status remain explicit without exposing configured keys',()=>{
+  const priorNode=globalThis.Node,priorDocument=globalThis.document;globalThis.Node=AiNode;globalThis.document={createElement:tag=>new AiNode(tag),createTextNode:text=>new AiNode('#text',String(text))};
+  try{
+    const jobRoot=new AiNode('main');renderAiView(jobRoot,{type:'ai-job',job:{id:'job-1',state:'searching',input:{name:'江南'},searchCalls:2,modelCalls:0}},{navigate(){},reuseJob(){}});assert.ok(jobRoot.all().some(node=>node.attrs['data-tone']==='searching'));assert.match(aiText(jobRoot),/正在检索资料.*检索 2\/3 次.*模型 0\/1 次/s);assert.ok(jobRoot.all().some(node=>node.className.includes('journal-section')));
+    const planRoot=new AiNode('main'),plan={id:'plan-1',content:content(),sources:[{sourceId:'s1',title:'文博来源',summary:'开放时间摘要',url:'https://example.com/source'}],conversion:null};renderAiView(planRoot,{type:'ai-plan',plan},{navigate(){},convert(){}});const text=aiText(planRoot);for(const value of ['检索资料','文博来源','开放时间摘要','打开来源'])assert.match(text,new RegExp(value));assert.doesNotMatch(text,/QA-MODEL|QA-SEARCH|TEMP-KEY/);assert.ok(planRoot.all().some(node=>node.className.includes('journal-section')));
+  }finally{globalThis.Node=priorNode;globalThis.document=priorDocument;}
+});

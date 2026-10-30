@@ -1,11 +1,11 @@
 import {formatCents} from '../shared/money.mjs';
 import {formatVisitDate} from '../shared/footprint-format.mjs';
-import {button,el} from './views.mjs';
+import {button,el,pageHeader} from './ui-elements.mjs';
 
 const money=value=>`¥${formatCents(value)}`;
 const time=value=>{const date=new Date(value);return Number.isFinite(date.getTime())?new Intl.DateTimeFormat('zh-CN',{dateStyle:'medium',timeStyle:'short',hour12:false}).format(date):value;};
 const empty=()=>el('p',{class:'archive-empty-copy'},'暂无相关记录');
-const link=(text,href)=>el('a',{class:'button secondary',href,target:'_blank',rel:'noopener'},text);
+const link=(text,href)=>el('a',{class:'button secondary',href,target:'_blank',rel:'noopener','aria-label':text},text);
 const item=(label,value)=>el('div',{class:'archive-fact'},el('span',{},label),el('strong',{},value));
 function section(title,...content) {return el('section',{class:'archive-section'},el('h2',{},title),...content);}
 function list(rows,render) {return rows.length?el('ul',{class:'archive-list'},rows.map(render)):empty();}
@@ -53,6 +53,6 @@ export function renderArchiveView(root,state,actions) {
   if(state.type==='archive-loading'){root.append(el('p',{class:'loading',role:'status'},'正在生成旅行档案…'));return;}
   if(state.type==='archive-error'){root.append(el('section',{class:'empty-state'},el('h1',{},'暂时无法生成档案'),el('p',{role:'alert'},state.message),button('重新载入',()=>actions.retry(state.route))));return;}
   if(state.type==='archive-empty'){root.append(el('section',{class:'empty-state'},el('h1',{},'还没有可收录的行程'),el('p',{},`截至 ${state.report.cutoffDate}，只有已经结束的行程会进入旅行档案。`)));return;}
-  if(state.type==='archive-home'){const report=state.report;root.append(el('header',{class:'page-header'},el('div',{},el('p',{class:'eyebrow'},'TRAVEL ARCHIVE'),el('h1',{},'旅行档案'))),el('section',{class:'archive-intro'},el('h2',{},`${report.summary.tripCount} 趟已结束行程`),el('p',{},`收录截止 ${report.cutoffDate}，包含完整路线、攻略、花销、足迹与检索来源。`),link('预览旅行总档案','#/reports/archive/print')));return;}
+  if(state.type==='archive-home'){const report=state.report;root.append(pageHeader({eyebrow:'TRAVEL ARCHIVE',title:'旅行档案'}),el('section',{class:'archive-intro archive-yearbook-cover journal-section'},el('img',{src:'/web/travel-wash.png',alt:'','aria-hidden':'true'}),el('div',{},el('p',{class:'eyebrow'},'PRIVATE TRAVEL YEARBOOK'),el('h2',{},`${report.summary.tripCount} 趟已结束行程`),el('p',{},`收录截止 ${report.cutoffDate}，包含完整路线、攻略、花销、足迹与检索来源。`),link('预览旅行总档案','#/reports/archive/print'))));return;}
   if(state.type==='archive-report'){root.append(reportToolbar(state.report,actions),state.report.kind==='archive'?totalReport(state.report):el('div',{class:'archive-document'},tripChapter(state.report,{standalone:true}),el('p',{class:'archive-generated'},`生成于 ${time(state.report.generatedAt)} · 数据库版本 v${state.report.databaseVersion}`)));}
 }

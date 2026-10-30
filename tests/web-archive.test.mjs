@@ -81,3 +81,8 @@ test('archive empty sections remain explicit and incomplete states have no print
 test('archive stylesheet declares fixed A4 pagination and long-content guards',()=>{
   const css=readFileSync(new URL('../src/web/archive-styles.css',import.meta.url),'utf8');assert.match(css,/@page\s*\{[^}]*size:\s*A4 portrait/s);assert.match(css,/@media\s+print/);assert.match(css,/thead\s*\{[^}]*table-header-group/s);assert.match(css,/break-before:\s*page/);assert.match(css,/break-inside:\s*avoid/);assert.match(css,/\.archive-document\s*\{[^}]*overflow-wrap:\s*anywhere/s);assert.match(css,/\.archive-expense-table\s*\{[^}]*table-layout:\s*fixed/s);assert.match(css,/\.archive-expense-table[^}]*td[^}]*\{[^}]*overflow-wrap:\s*anywhere/s);
 });
+
+test('archive landing names its preview while print DOM excludes screen runtime hooks and decoration',()=>withDom(()=>{
+  const landing=new FakeNode('main');renderArchiveView(landing,{type:'archive-home',route:{type:'archive-home'},report:totalReport()},{print(){},retry(){}});const landingNodes=nodes(landing),preview=landingNodes.find(node=>node.tag==='a'&&node.attrs.href==='#/reports/archive/print');assert.ok(landingNodes.some(node=>node.tag==='h1'&&textOf(node).includes('旅行档案')));assert.ok(preview);assert.match(textOf(preview),/预览旅行总档案/);assert.ok(landingNodes.some(node=>node.className.includes('archive-yearbook-cover')));
+  const print=new FakeNode('main');renderArchiveView(print,{type:'archive-report',route:{type:'archive-print'},report:totalReport()},{print(){},retry(){}});const printNodes=nodes(print);for(const node of printNodes){assert.equal(Object.hasOwn(node.attrs,'data-spotlight'),false);assert.equal(Object.hasOwn(node.attrs,'data-counter'),false);assert.notEqual(node.attrs.src,'/web/travel-wash.png');}
+}));

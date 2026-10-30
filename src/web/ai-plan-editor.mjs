@@ -30,7 +30,7 @@ export function renderAiEditor(root,state,actions,{focusField}={}) {
   if(state.error)root.append(el('p',{class:'form-error',role:'alert'},state.error));
   const content=state.content;
   content.days.forEach((day,dayIndex)=>{
-    const card=el('section',{class:'day-card'},el('h2',{},day.date));
+    const card=el('section',{class:'day-card journal-section'},el('h2',{},day.date));
     day.activities.forEach((activity,activityIndex)=>{
       const base=['days',dayIndex,'activities',activityIndex];
       const titleId=editorFieldId(dayIndex,activityIndex,'title'),descriptionId=editorFieldId(dayIndex,activityIndex,'description');

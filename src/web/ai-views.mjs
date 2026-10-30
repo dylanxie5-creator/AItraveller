@@ -51,13 +51,13 @@ function renderSettings(root,state,actions) {
   root.append(heading('LOCAL AI SETTINGS','模型与搜索设置'),el('p',{class:'privacy-note'},'Key 仅提交到本机服务，以 Windows 当前用户加密保存；页面永不回填。'));
   for(const [id,meta] of Object.entries(providers)) {
     const value=state.settings.providers[id],action=defaultKeyAction(value.keyConfigured);
-    form.append(el('fieldset',{class:'provider-card'},el('legend',{},meta.name),
+    form.append(el('fieldset',{class:'provider-card journal-section'},el('legend',{},meta.name),
       field('模型名称',inputNode(`${id}-model`,value.model||meta.model,{name:`${id}-model`,required:true})),
       field('官方接口地址',inputNode(`${id}-endpoint`,value.endpoint||meta.endpoint,{name:`${id}-endpoint`,required:true})),
       field(value.keyConfigured?'API Key（已配置；留空不会读取或显示）':'API Key',inputNode(`${id}-key`,'',{name:`${id}-key`,type:'password',autocomplete:'new-password'})),
       el('div',{class:'key-actions'},...[['retain','保留'],['replace','替换'],['delete','明确删除']].map(([key,label])=>el('label',{},el('input',{type:'radio',name:`${id}-key-action`,value:key,checked:action===key,disabled:key==='retain'&&!value.keyConfigured}),label)))));
   }
-  form.append(el('fieldset',{class:'provider-card'},el('legend',{},'联网检索'),
+  form.append(el('fieldset',{class:'provider-card journal-section'},el('legend',{},'联网检索'),
     el('label',{},el('input',{type:'radio',name:'search-mode',value:'zhipu',checked:state.settings.search.keyMode==='zhipu'}),'复用智谱模型 Key'),
     el('label',{},el('input',{type:'radio',name:'search-mode',value:'separate',checked:state.settings.search.keyMode==='separate'}),'使用独立智谱搜索 Key'),
     field('独立搜索 Key',inputNode('search-key','',{name:'search-key',type:'password',autocomplete:'new-password'})),
@@ -95,7 +95,7 @@ function renderPlanner(root,state,actions) {
   const first=firstAiField(state.fields);if(first)form.querySelector(`#${first}`)?.focus();
 }
 function renderJob(root,state,actions) {
-  const job=state.job;root.append(heading('AI PLANNING JOB','规划任务'),el('section',{class:'job-card'},statusBadge(statusText(job),job.state),el('h2',{},job.input?.name??'旅行攻略'),el('p',{},`已预留：检索 ${job.searchCalls}/3 次 · 模型 ${job.modelCalls}/1 次`),
+  const job=state.job;root.append(heading('AI PLANNING JOB','规划任务'),el('section',{class:'job-card journal-section'},statusBadge(statusText(job),job.state),el('h2',{},job.input?.name??'旅行攻略'),el('p',{},`已预留：检索 ${job.searchCalls}/3 次 · 模型 ${job.modelCalls}/1 次`),
     job.error?el('p',{class:'form-error',role:'alert'},job.error.message):[],
     actionGroup(job.state==='succeeded'?button('查看攻略',()=>actions.navigate({type:'ai-plan',id:job.planId})):null,
       ['failed','interrupted'].includes(job.state)?button('基于保留输入新生成',()=>actions.reuseJob(job),'secondary'):null)));
@@ -111,8 +111,8 @@ export function renderPlan(root,plan,actions,{editing=false}={}) {
   for(const day of plan.content.days) {
     const activities=day.activities.map(item=>el('article',{class:'activity'},
       el('h3',{},item.title),el('p',{},item.description),el('span',{class:'source-refs'},item.sourceIds.join('、'))));
-    root.append(el('section',{class:'day-card'},el('h2',{},day.date),activities));
+    root.append(el('section',{class:'day-card journal-section'},el('h2',{},day.date),activities));
   }
-  if(plan.content.cautions.length)root.append(el('section',{class:'caution-card'},el('h2',{},'出行提醒'),el('ul',{},plan.content.cautions.map(value=>el('li',{},value)))));
-  root.append(el('section',{class:'sources'},el('h2',{},'检索资料（仅保存搜索摘要，未阅读全文）'),...plan.sources.map(source=>{const url=safeSourceUrl(source.url);return el('article',{},el('h3',{},source.title),el('p',{},source.summary),url?el('a',{href:url,target:'_blank',rel:'noopener noreferrer'},'打开来源'):el('span',{class:'muted'},'来源地址不可安全打开'));})));
+  if(plan.content.cautions.length)root.append(el('section',{class:'caution-card journal-section'},el('h2',{},'出行提醒'),el('ul',{},plan.content.cautions.map(value=>el('li',{},value)))));
+  root.append(el('section',{class:'sources journal-section'},el('h2',{},'检索资料（仅保存搜索摘要，未阅读全文）'),...plan.sources.map(source=>{const url=safeSourceUrl(source.url);return el('article',{},el('h3',{},source.title),el('p',{},source.summary),url?el('a',{href:url,target:'_blank',rel:'noopener noreferrer'},'打开来源'):el('span',{class:'muted'},'来源地址不可安全打开'));})));
 }
