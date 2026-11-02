@@ -6,7 +6,7 @@ import {resolveEdgeExecutable,runWindowsApp} from '../src/desktop/windows-app-la
 const projectRoot=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const allowedCodes=new Set([
   'ALREADY_RUNNING','EDGE_NOT_FOUND','EDGE_START_FAILED','EDGE_EXIT_FAILED',
-  'SERVER_START_FAILED','SERVER_STOP_FAILED','LAUNCHER_FAILED','INVALID_PORT'
+  'SERVER_START_FAILED','SERVER_STOPPED','SERVER_STOP_FAILED','LAUNCHER_FAILED','INVALID_PORT'
 ]);
 
 export async function writeLauncherLog(path,record) {

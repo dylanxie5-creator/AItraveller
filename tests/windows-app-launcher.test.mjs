@@ -125,3 +125,57 @@ test('second instance failure never spawns Edge or closes an unrelated server',a
   }),error=>error instanceof DesktopLaunchError&&error.code==='ALREADY_RUNNING'&&error.message==='ALREADY_RUNNING');
   assert.equal(spawnCount,0);
 });
+
+test('unexpected server shutdown terminates Edge and never reports a normal lifecycle result',async()=>{
+  let closeCount=0,killCount=0,resolveClosed;
+  const serverController=new AbortController();
+  const closed=new Promise(resolve=>{resolveClosed=resolve;});
+  const child=childProcess({onKill:()=>{killCount++;queueMicrotask(()=>child.emit('exit',0,'SIGTERM'));}});
+  const pending=runWindowsApp({
+    startServerImpl:async()=>({
+      url:'http://127.0.0.1:3210',
+      signal:serverController.signal,
+      closed,
+      close:async()=>{closeCount++;}
+    }),
+    spawnImpl:()=>{
+      queueMicrotask(()=>{serverController.abort();resolveClosed({ownershipLost:true});});
+      setTimeout(()=>child.emit('exit',0,null),20);
+      return child;
+    },
+    edgePath:'C:\\Edge\\msedge.exe',profileDirectory:'C:\\旅行\\profile'
+  });
+  await assert.rejects(pending,error=>error instanceof DesktopLaunchError&&error.code==='SERVER_STOPPED'&&error.message==='SERVER_STOPPED');
+  assert.equal(killCount,1);
+  assert.equal(closeCount,1);
+});
+
+test('cancellation keeps a delayed child spawn error handled until the child finishes',async()=>{
+  let closeCount=0;
+  const controller=new AbortController();
+  const child=childProcess();
+  const pending=runWindowsApp({
+    startServerImpl:async()=>({url:'http://127.0.0.1:3210',close:async()=>{closeCount++;}}),
+    spawnImpl:()=>{
+      queueMicrotask(()=>controller.abort());
+      setImmediate(()=>child.emit('error',new Error('SECRET delayed spawn failure')));
+      return child;
+    },
+    edgePath:'Z:\\missing\\msedge.exe',profileDirectory:'C:\\旅行\\profile',signal:controller.signal
+  });
+  assert.deepEqual(await pending,{edgeExitCode:null});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(closeCount,1);
+});
+
+test('an already cancelled launch starts neither the server nor Edge',async()=>{
+  let starts=0,spawns=0;
+  const controller=new AbortController();controller.abort();
+  assert.deepEqual(await runWindowsApp({
+    startServerImpl:async()=>{starts++;return {url:'http://127.0.0.1:3210',close:async()=>{}};},
+    spawnImpl:()=>{spawns++;return childProcess();},
+    edgePath:'C:\\Edge\\msedge.exe',profileDirectory:'C:\\旅行\\profile',signal:controller.signal
+  }),{edgeExitCode:null});
+  assert.equal(starts,0);
+  assert.equal(spawns,0);
+});

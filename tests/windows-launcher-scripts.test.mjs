@@ -88,6 +88,21 @@ test('desktop entry rejects an invalid port before starting Edge',async()=>{
   assert.equal(logs.at(-1).code,'INVALID_PORT');
 });
 
+test('desktop entry records unexpected server shutdown as failure rather than OK',async()=>{
+  const logs=[];
+  const error=new Error('private lock helper detail');error.code='SERVER_STOPPED';
+  const code=await runDesktopEntry({
+    env:{},resolveEdgeImpl:()=> 'C:\\Edge\\msedge.exe',
+    runWindowsAppImpl:async()=>{throw error;},
+    writeLog:async record=>logs.push(record),
+    now:()=>new Date('2026-11-02T08:00:00.000Z')
+  });
+  assert.equal(code,1);
+  assert.equal(logs.at(-1).code,'SERVER_STOPPED');
+  assert.equal(logs.some(record=>record.code==='OK'),false);
+  assert.equal(JSON.stringify(logs).includes('private lock helper'),false);
+});
+
 test('launcher log overwrites the previous bounded record',async t=>{
   const directory=mkdtempSync(join(tmpdir(),'travel-launcher-log-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
   const path=join(directory,'runtime','launcher.log');
