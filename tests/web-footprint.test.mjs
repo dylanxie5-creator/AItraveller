@@ -62,3 +62,28 @@ test('map failure keeps province list and final numeric counters available',()=>
   try{const root=new FakeNode('main'),actions={navigate(){},controller:{setField(){}}};renderFootprintView(root,{type:'footprints',overview,filteredProvinces:overview.provinces,query:'',mapState:'error',mapError:'地图失败'},actions);const nodes=[];(function walk(node){nodes.push(node);for(const child of node.children)walk(child);})(root);const text=nodes.filter(node=>node.tag==='#text').map(node=>node.text).join(' ');for(const value of ['地图加载失败','江苏省','南京市','到访省份','到访城市','到访次数'])assert.match(text,new RegExp(value));const counters=nodes.filter(node=>Object.hasOwn(node.attrs,'data-counter'));assert.equal(counters.length,3);assert.deepEqual(counters.map(node=>nodes.filter(item=>item===node||false).length&&node.children.map(child=>child.text).join('')),['1','1','1']);}
   finally{globalThis.Node=priorNode;globalThis.document=priorDocument;}
 });
+
+test('manual footprint city search keeps the live input and renders returned choices in place',async()=>{
+  class SearchNode {
+    constructor(tag='',text=''){this.tag=tag;this.text=text;this.children=[];this.attrs={};this.className='';this.parentElement=null;this.listeners={};this.value='';}
+    setAttribute(key,value){this.attrs[key]=String(value);if(key==='class')this.className=String(value);if(key==='value')this.value=String(value);}
+    addEventListener(type,listener){this.listeners[type]=listener;}
+    append(...items){for(const item of items.flat(Infinity)){const child=item instanceof SearchNode?item:new SearchNode('#text',String(item));child.parentElement=this;this.children.push(child);}}
+    replaceChildren(...items){for(const child of this.children)child.parentElement=null;this.children=[];this.append(...items);}
+    matches(selector){if(selector.startsWith('#'))return this.attrs.id===selector.slice(1);if(selector.startsWith('.'))return this.className.split(/\s+/).includes(selector.slice(1));return this.tag===selector;}
+    all(){const result=[];(function walk(node){for(const child of node.children){result.push(child);walk(child);}})(this);return result;}
+    querySelector(selector){return this.all().find(node=>node.matches(selector))??null;}
+    get textContent(){return this.tag==='#text'?this.text:this.children.map(child=>child.textContent).join('');}
+    set textContent(value){this.children=[];if(value!=='')this.append(String(value));}
+    get isConnected(){let node=this;while(node.parentElement)node=node.parentElement;return node.tag==='main';}
+  }
+  const priorNode=globalThis.Node,priorDocument=globalThis.document;globalThis.Node=SearchNode;globalThis.document={createElement:tag=>new SearchNode(tag),createTextNode:text=>new SearchNode('#text',String(text))};
+  try{
+    const root=new SearchNode('main'),result={cityCode:'320100',cityName:'南京市',provinceCode:'320000',provinceName:'江苏省'};
+    const controller={setField(){},save(){},searchCities:async query=>{assert.equal(query,'南京');return [result];}};
+    renderFootprintView(root,{type:'footprint-form',visit:null,noteOnly:false,values:{cityCode:'',datePrecision:'year',dateStart:'',note:''},errors:{},busy:false,error:'',cityOptions:[]},{navigate(){},controller});
+    const input=root.querySelector('#footprint-city-search'),choices=root.querySelector('.city-search-results');assert.ok(input);assert.ok(choices);
+    input.value='南京';await input.listeners.input({target:input});
+    assert.equal(root.querySelector('#footprint-city-search'),input);assert.equal(input.value,'南京');assert.match(choices.textContent,/南京市 · 江苏省/);
+  }finally{globalThis.Node=priorNode;globalThis.document=priorDocument;}
+});
