@@ -76,26 +76,43 @@ export function createArchivePdfLayout(doc,{fonts}={}) {
     const rows=Array.isArray(items)?items:[];
     if(!rows.length){paragraph('暂无相关记录',{color:PALETTE.muted});return;}
     const widths=[66,58,76,72,contentWidth()-272],headers=['日期','分类','城市','金额','备注'];
-    const headerHeight=25;
+    const headerHeight=25,minRowHeight=24;
     function drawHeader() {
-      ensureSpace(headerHeight+18);
+      ensureSpace(headerHeight+minRowHeight);
       const y=doc.y;let x=MARGINS.left;
       doc.fillColor(PALETTE.soft).rect(x,y,contentWidth(),headerHeight).fill();
       doc.font('ArchiveBold').fontSize(8.5).fillColor(PALETTE.ink);
       headers.forEach((value,index)=>{doc.text(value,x+4,y+7,{width:widths[index]-8,lineBreak:false});x+=widths[index];});
       doc.y=y+headerHeight;
     }
+    function splitCell(value,index,maxHeight) {
+      const options={width:widths[index]-8,lineGap:1};
+      if(!value||doc.heightOfString(value,options)<=maxHeight)return {part:value,rest:''};
+      const characters=Array.from(value);let low=1,high=characters.length,best=1;
+      while(low<=high) {
+        const middle=Math.floor((low+high)/2),candidate=characters.slice(0,middle).join('');
+        if(doc.heightOfString(candidate,options)<=maxHeight){best=middle;low=middle+1;}else high=middle-1;
+      }
+      return {part:characters.slice(0,best).join(''),rest:characters.slice(best).join('')};
+    }
     drawHeader();
     for(const item of rows) {
-      const cells=[text(item.spentDate),text(item.categoryName),text(item.cityName),money(item.amountCents),text(item.note||'—')];
-      doc.font('ArchiveRegular').fontSize(8.2);
-      const rowHeight=Math.max(24,...cells.map((value,index)=>doc.heightOfString(value,{width:widths[index]-8,lineGap:1})+10));
-      if(ensureSpace(rowHeight)){drawHeader();}
-      const y=doc.y;let x=MARGINS.left;
-      doc.strokeColor(PALETTE.line).lineWidth(.5).moveTo(x,y).lineTo(x+contentWidth(),y).stroke();
-      doc.fillColor(PALETTE.ink).font('ArchiveRegular').fontSize(8.2);
-      cells.forEach((value,index)=>{doc.text(value,x+4,y+5,{width:widths[index]-8,lineGap:1});x+=widths[index];});
-      doc.y=y+rowHeight;
+      let remaining=[text(item.spentDate),text(item.categoryName),text(item.cityName),money(item.amountCents),text(item.note||'—')];
+      while(remaining.some(Boolean)) {
+        if(bottom()-doc.y<minRowHeight){addPage(currentLabel);drawHeader();}
+        doc.font('ArchiveRegular').fontSize(8.2);
+        const maxTextHeight=Math.max(1,bottom()-doc.y-10);
+        const fragments=remaining.map((value,index)=>splitCell(value,index,maxTextHeight));
+        const cells=fragments.map(value=>value.part);
+        const rowHeight=Math.max(minRowHeight,...cells.map((value,index)=>doc.heightOfString(value,{width:widths[index]-8,lineGap:1})+10));
+        const y=doc.y;let x=MARGINS.left;
+        doc.strokeColor(PALETTE.line).lineWidth(.5).moveTo(x,y).lineTo(x+contentWidth(),y).stroke();
+        doc.fillColor(PALETTE.ink).font('ArchiveRegular').fontSize(8.2);
+        cells.forEach((value,index)=>{doc.text(value,x+4,y+5,{width:widths[index]-8,lineGap:1});x+=widths[index];});
+        doc.y=y+rowHeight;
+        remaining=fragments.map(value=>value.rest);
+        if(remaining.some(Boolean)){addPage(currentLabel);drawHeader();}
+      }
     }
     doc.y+=8;
   }
@@ -115,4 +132,3 @@ export function createArchivePdfLayout(doc,{fonts}={}) {
   }
   return {addPage,ensureSpace,title,heading,paragraph,facts,list,source,expenseTable,finalize};
 }
-

@@ -9,12 +9,18 @@ function planChapter(layout,label,plan) {
   layout.heading(label,3);
   if(!plan){layout.paragraph('暂无相关记录');return;}
   const trip=plan.trip??{};
-  layout.paragraph(`${trip.name??'未命名攻略'} · ${trip.startDate??'—'} 至 ${trip.endDate??'—'} · ${trip.travelerCount??'—'} 人`);
+  const cityNames=new Map((trip.cities??[]).map(city=>[city.cityCode,city.cityName??city.cityCode]));
+  const budget=trip.budgetCents===null||trip.budgetCents===undefined?'未设置':money(trip.budgetCents);
+  layout.paragraph(`${trip.name??'未命名攻略'} · ${trip.startDate??'—'} 至 ${trip.endDate??'—'} · ${trip.travelerCount??'—'} 人 · 预算 ${budget}`);
   if(Array.isArray(trip.cities)&&trip.cities.length)layout.list(trip.cities.map(city=>`${city.provinceName??''}${city.cityName??city.cityCode??''} · ${city.arrivalDate??'—'} 至 ${city.departureDate??'—'}`));
   if(Array.isArray(plan.days)&&plan.days.length) {
     for(const day of plan.days) {
       layout.heading(day.date??'未记录日期',3);
-      layout.list((day.activities??[]).map(activity=>`${activity.title??'未命名活动'}｜${activity.description??'暂无说明'}${activity.cityName?`｜${activity.cityName}`:''}`));
+      layout.list((day.activities??[]).map(activity=>{
+        const city=cityNames.get(activity.cityCode)??activity.cityName??activity.cityCode??'城市未知';
+        const sources=Array.isArray(activity.sourceIds)&&activity.sourceIds.length?`｜来源 ${activity.sourceIds.join('、')}`:'';
+        return `${activity.title??'未命名活动'}｜${activity.description??'暂无说明'}｜${city}${sources}`;
+      }));
     }
   } else layout.paragraph('暂无每日安排');
   layout.heading('注意事项',3);
@@ -41,7 +47,7 @@ export function renderTripArchivePdf(layout,report,{standalone=true}={}) {
   planChapter(layout,'转换时快照',guide?.conversionSnapshot);
   planChapter(layout,'模型原始输出',guide?.original);
   layout.heading('检索来源',3);
-  if(guide?.sources?.length)for(const item of guide.sources)layout.source(item);else layout.paragraph('暂无相关记录');
+  if(guide?.sources?.length)for(const item of guide.sources)layout.source({...item,title:item.sourceId?`[${item.sourceId}] ${item.title??'未命名来源'}`:item.title});else layout.paragraph('暂无相关记录');
 
   layout.heading('花销统计与明细');
   if(expenses.hasExpenses) {

@@ -98,6 +98,20 @@ test('mobile more drawer traps focus closes with Escape and restores the trigger
   fixture.document.dispatch('keydown',{key:'Escape',preventDefault(){}});assert.equal(fixture.drawer.hidden,true);assert.equal(fixture.more.getAttribute('aria-expanded'),'false');assert.equal(fixture.document.activeElement,fixture.more);
 });
 
+test('choosing a mobile More destination closes the drawer before destination focus',()=>{
+  const fixture=runtimeFixture(),runtime=createUiRuntime(fixture);
+  fixture.first.setAttribute('data-more-focusable','');
+  fixture.first.closest=selector=>selector==='[data-more-focusable]'?fixture.first:null;
+  runtime.openMore();
+  fixture.drawer.dispatch('click',{target:fixture.first});
+  assert.equal(fixture.drawer.hidden,true);
+  assert.equal(fixture.backdrop.hidden,true);
+  assert.equal(fixture.root.inert,false);
+  assert.notEqual(fixture.document.activeElement,fixture.more);
+  fixture.heading.textContent='旅行档案';runtime.refresh('archive');
+  assert.equal(fixture.document.activeElement,fixture.heading);
+});
+
 test('skip link focuses content without changing the hash route',()=>{
   const fixture=runtimeFixture(),runtime=createUiRuntime(fixture),before=fixture.window.location.hash;let prevented=false;fixture.skip.dispatch('click',{preventDefault(){prevented=true;}});
   assert.equal(prevented,true);assert.equal(fixture.document.activeElement,fixture.root);assert.equal(fixture.window.location.hash,before);runtime.dispose();

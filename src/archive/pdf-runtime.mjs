@@ -4,6 +4,7 @@ import PDFDocument from 'pdfkit';
 import {StoreError} from '../storage/errors.mjs';
 
 export const PDF_LIMIT_BYTES=67108864;
+export const PDF_LIMIT_PAGES=256;
 
 const publicErrors={
   PDF_FONT_UNAVAILABLE:'当前电脑缺少生成中文 PDF 所需的字体',
@@ -37,11 +38,14 @@ export function archivePdfFilename(report) {
   return `旅行总档案-截至${report?.cutoffDate??'未知日期'}.pdf`;
 }
 
-export async function createPdfBuffer({render,PDFDocumentClass=PDFDocument,documentOptions={},maxBytes=PDF_LIMIT_BYTES}={}) {
-  if(typeof render!=='function'||typeof PDFDocumentClass!=='function'||!Number.isSafeInteger(maxBytes)||maxBytes<1)throw failure('PDF_GENERATION_FAILED');
-  let doc;
+export async function createPdfBuffer({render,PDFDocumentClass=PDFDocument,documentOptions={},maxBytes=PDF_LIMIT_BYTES,maxPages=PDF_LIMIT_PAGES}={}) {
+  if(typeof render!=='function'||typeof PDFDocumentClass!=='function'||!Number.isSafeInteger(maxBytes)||maxBytes<1||!Number.isSafeInteger(maxPages)||maxPages<1)throw failure('PDF_GENERATION_FAILED');
+  let doc,pageGuard;
   try {
     doc=new PDFDocumentClass({...documentOptions,autoFirstPage:false,bufferPages:true,compress:true});
+    let pageCount=0;
+    pageGuard=()=>{pageCount++;if(pageCount>maxPages)throw failure('PDF_TOO_LARGE');};
+    doc.on('pageAdded',pageGuard);
     const chunks=[];
     let total=0,settled=false;
     const completed=new Promise((resolve,reject)=>{
@@ -58,12 +62,14 @@ export async function createPdfBuffer({render,PDFDocumentClass=PDFDocument,docum
     await render(doc);
     const range=doc.bufferedPageRange?.();
     if(!range||!Number.isSafeInteger(range.count)||range.count<1)throw failure('PDF_GENERATION_FAILED');
+    if(range.count>maxPages)throw failure('PDF_TOO_LARGE');
     doc.end();
     const buffer=await completed;
     if(buffer.length>maxBytes)throw failure('PDF_TOO_LARGE');
     if(buffer.length<5||buffer.subarray(0,5).toString('ascii')!=='%PDF-')throw failure('PDF_GENERATION_FAILED');
     return buffer;
   } catch(error) {
+    if(doc&&pageGuard)doc.removeListener?.('pageAdded',pageGuard);
     throw controlled(error);
   }
 }

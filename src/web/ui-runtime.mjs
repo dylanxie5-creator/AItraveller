@@ -68,6 +68,7 @@ export function createUiRuntime({document,window,root,raf=window.requestAnimatio
 
   listen(document,'keydown',onKeydown);
   listen(trigger,'click',()=>drawerOpen?closeMore():openMore());
+  listen(drawer,'click',event=>{if(drawerOpen&&event.target?.closest?.('[data-more-focusable]'))closeMore({restoreFocus:false});});
   listen(closeButton,'click',()=>closeMore());
   listen(backdrop,'click',()=>closeMore());
   listen(skipLink,'click',event=>{event.preventDefault();root.focus();});

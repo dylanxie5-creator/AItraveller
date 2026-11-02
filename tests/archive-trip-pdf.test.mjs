@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import PDFDocument from 'pdfkit';
 import {createArchivePdfLayout} from '../src/archive/pdf-layout.mjs';
 import {createTripArchivePdf,renderTripArchivePdf} from '../src/archive/trip-pdf.mjs';
 
@@ -87,9 +88,46 @@ test('expense table measures wrapped cells repeats its header and emits every ro
   for(const row of rows)assert.ok(textCalls.includes(row.note),row.note.slice(0,12));
 });
 
+test('expense table splits a legal multiline note without header-only or headerless pages',async()=>{
+  const doc=new PDFDocument({autoFirstPage:false,bufferPages:true,compress:false}),pageTexts=new Map(),originalText=doc.text;
+  doc.text=function(value,...args) {
+    const index=this._pageBuffer.indexOf(this.page),values=pageTexts.get(index)??[];
+    values.push(String(value));pageTexts.set(index,values);
+    return originalText.call(this,value,...args);
+  };
+  const layout=createArchivePdfLayout(doc,{fonts:{regular:'C:\\Windows\\Fonts\\msyh.ttc',bold:'C:\\Windows\\Fonts\\msyhbd.ttc'}});
+  layout.addPage('花销分页');
+  layout.expenseTable([
+    {spentDate:'2026-10-10',categoryName:'交通',cityName:'南京市',amountCents:2000,note:`${'甲\n'.repeat(89)}尾`},
+    {spentDate:'2026-10-11',categoryName:'餐饮',cityName:'苏州市',amountCents:3000,note:'第二笔'},
+  ]);
+  layout.finalize();
+  const count=doc.bufferedPageRange().count;
+  const ended=new Promise((resolve,reject)=>{doc.on('data',()=>{});doc.once('end',resolve);doc.once('error',reject);});
+  doc.end();await ended;
+  assert.ok(count>1,`pages=${count}`);
+  for(let index=0;index<count;index++) {
+    const values=pageTexts.get(index)??[];
+    assert.ok(values.includes('日期'),`page ${index+1} missing expense header`);
+    assert.ok(values.some(value=>value.includes('甲')||value.includes('尾')||value==='2026-10-11'),`page ${index+1} has only a header`);
+  }
+});
+
 test('trip PDF includes cover route three guide versions sources expenses and footprints',()=>{
   const layout=semanticLayout();renderTripArchivePdf(layout,report());const text=semanticText(layout);
   for(const expected of ['金陵四日秋游','行程概览','城市路线','攻略与每日安排','当前攻略','转换时快照','模型原始输出','检索来源','官方旅行资料','花销统计与明细','第 1 笔','足迹与备注','秋游'])assert.match(text,new RegExp(expected));
+});
+
+test('trip PDF preserves each guide budget activity city and source references',()=>{
+  const value=report();
+  value.guide.current.trip.budgetCents=11100;
+  value.guide.conversionSnapshot.trip.budgetCents=22200;
+  value.guide.original.trip.budgetCents=33300;
+  const layout=semanticLayout();renderTripArchivePdf(layout,value);
+  const visible=layout.calls.flatMap(call=>call.slice(1)).flat(Infinity).filter(item=>typeof item==='string').join('\n');
+  for(const expected of ['¥111.00','¥222.00','¥333.00','南京市','来源 s1'])assert.match(visible,new RegExp(expected));
+  const sourceCall=layout.calls.find(call=>call[0]==='source');
+  assert.match(sourceCall?.[1]?.title??'',/s1/u);
 });
 
 test('trip PDF keeps explicit empty chapters without fabricating guide or expense data',()=>{

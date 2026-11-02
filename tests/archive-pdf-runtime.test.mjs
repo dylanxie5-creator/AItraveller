@@ -77,3 +77,21 @@ test('PDF buffer collector converts renderer failure invalid magic empty pages a
     );
   }
 });
+
+test('PDF page budget aborts rendering before buffered pages can exhaust memory',async()=>{
+  let rendered=0;
+  await assert.rejects(
+    createPdfBuffer({
+      PDFDocumentClass:PDFDocument,
+      maxPages:3,
+      render(doc) {
+        for(let index=0;index<100;index++) {
+          rendered++;
+          doc.addPage({size:'A4'}).fontSize(12).text(`page ${index+1}`);
+        }
+      },
+    }),
+    error=>error.code==='PDF_TOO_LARGE'&&error.message==='PDF 内容过多，无法生成单个文件',
+  );
+  assert.equal(rendered,4);
+});
