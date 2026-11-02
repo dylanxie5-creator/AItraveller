@@ -10,14 +10,24 @@
 npm install
 ```
 
-在 PowerShell 中执行：
+推荐使用桌面一键启动。首次安装或项目目录移动后，在项目目录执行一次：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install-desktop-shortcut.ps1
+```
+
+随后双击桌面“智游足迹”图标。网站会在独立的 Microsoft Edge 应用窗口中打开，不显示普通浏览器地址栏；关闭这个窗口后，本机服务会自动停止并释放数据库锁。若启动失败，Windows 会显示简短提示，脱敏诊断状态写入 `runtime/launcher.log`。
+
+维护和故障排查仍可使用原来的命令行方式：
 
 ```powershell
 cd 'C:\Users\X\Documents\ChatGPT\智游足迹网页版'
 npm start
 ```
 
-保持该终端运行，浏览器打开 <http://127.0.0.1:3210/>。用 **Ctrl+C** 停止服务；关闭浏览器不会停止服务。没有服务运行时，页面无法打开。
+保持该终端运行，浏览器打开 <http://127.0.0.1:3210/>。命令行方式用 **Ctrl+C** 停止服务，普通浏览器标签关闭不会停止它；只有桌面一键启动的专用 Edge 应用窗口具备“关闭窗口即停止”。没有服务运行时，页面无法打开。
+
+Windows 启动器的脚本、快捷方式、隔离 Edge 窗口、关闭后端口释放和数据库锁复用证据见 [Windows 一键启动验收记录](docs/windows-launcher-acceptance.md)。
 
 ## 界面与导航
 
